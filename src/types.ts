@@ -103,3 +103,26 @@ export const TERMINAL_BUNDLE_ID: Record<TerminalType, string> = {
   terminal: 'com.apple.Terminal',
   unknown: 'com.apple.Terminal',
 };
+
+// 会话事件类型
+export type SessionEventType = 'started' | 'ended' | 'waiting' | 'resumed' | 'killed';
+
+// 会话事件
+export interface SessionEvent {
+  id: string;
+  type: SessionEventType;
+  pid: number;
+  project: string;
+  timestamp: number;
+  message?: string;
+}
+
+// WebSocket 消息类型
+export type ServerMessage =
+  | { type: 'init'; sessions: Session[]; events: SessionEvent[] }
+  | { type: 'session_update'; session: Session }
+  | { type: 'session_removed'; pid: number }
+  | { type: 'new_event'; event: SessionEvent };
+
+export type ClientMessage =
+  | { type: 'kill_session'; pid: number };
