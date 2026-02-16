@@ -2,7 +2,7 @@ import { defineConfig } from 'tsup';
 
 export default defineConfig([
   {
-    entry: ['src/daemon/index.ts'],
+    entry: { daemon: 'src/daemon/index.ts' },
     outDir: 'dist',
     format: 'esm',
     platform: 'node',
@@ -13,7 +13,7 @@ export default defineConfig([
     dts: false,
   },
   {
-    entry: ['src/cli/index.ts'],
+    entry: { cli: 'src/cli/index.ts' },
     outDir: 'dist',
     format: 'esm',
     platform: 'node',
