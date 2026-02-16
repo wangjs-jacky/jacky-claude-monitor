@@ -1,10 +1,24 @@
 // src/daemon/server.ts
-import express, { type Request, type Response, type Express } from 'express';
-import type { Session, ApiResponse, ApiErrorResponse, RegisterSessionRequest, UpdateSessionRequest } from '../types.js';
+import express, { type Request, type Response } from 'express';
+import { createServer as createHttpServer, type Server } from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import type { Session, ApiResponse, ApiErrorResponse, RegisterSessionRequest, UpdateSessionRequest, SessionEvent } from '../types.js';
 import { sessionStore } from './store.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.use(express.json());
+
+// 静态文件服务 (Dashboard)
+const publicPath = path.join(__dirname, '../../dist/public');
+app.use('/dashboard', express.static(publicPath));
+
+// 主页重定向到 Dashboard
+app.get('/', (_req, res) => {
+  res.redirect('/dashboard');
+});
 
 /**
  * 成功响应辅助函数
@@ -117,8 +131,17 @@ app.get('/api/health', (_req: Request, res: Response<ApiResponse<{ status: strin
 });
 
 /**
- * 创建并配置 Express 服务器
+ * GET /api/events - 获取事件历史
  */
-export function createServer(): Express {
-  return app;
+app.get('/api/events', (_req: Request, res: Response<ApiResponse<SessionEvent[]>>) => {
+  const events = sessionStore.getEvents();
+  res.json(success(events));
+});
+
+/**
+ * 创建并配置 HTTP 服务器
+ */
+export function createServer(): Server {
+  const httpServer = createHttpServer(app);
+  return httpServer;
 }
