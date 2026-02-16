@@ -1,10 +1,15 @@
 // src/daemon/server.ts
 import express from "express";
+import { createServer as createHttpServer } from "http";
+import path from "path";
+import { fileURLToPath } from "url";
 
 // src/daemon/store.ts
 var SessionStore = class {
   constructor() {
     this.sessions = /* @__PURE__ */ new Map();
+    this.events = [];
+    this.MAX_EVENTS = 100;
   }
   /**
    * 注册新会话
@@ -23,6 +28,7 @@ var SessionStore = class {
       updatedAt: now
     };
     this.sessions.set(session.pid, session);
+    this.addEvent("started", session);
     return session;
   }
   /**
@@ -43,10 +49,16 @@ var SessionStore = class {
   update(pid, status, message) {
     const session = this.sessions.get(pid);
     if (!session) return void 0;
+    const oldStatus = session.status;
     session.status = status;
     session.updatedAt = Date.now();
     if (message !== void 0) {
       session.message = message;
+    }
+    if (status === "waiting") {
+      this.addEvent("waiting", session);
+    } else if (oldStatus === "waiting" && status === "running") {
+      this.addEvent("resumed", session);
     }
     return session;
   }
@@ -54,6 +66,10 @@ var SessionStore = class {
    * 删除会话
    */
   delete(pid) {
+    const session = this.sessions.get(pid);
+    if (session) {
+      this.addEvent("ended", session);
+    }
     return this.sessions.delete(pid);
   }
   /**
@@ -61,6 +77,36 @@ var SessionStore = class {
    */
   get count() {
     return this.sessions.size;
+  }
+  /**
+   * 记录事件
+   */
+  addEvent(type, session) {
+    const event = {
+      id: `${session.pid}-${Date.now()}`,
+      type,
+      pid: session.pid,
+      project: session.project,
+      timestamp: Date.now(),
+      message: session.message
+    };
+    this.events.unshift(event);
+    if (this.events.length > this.MAX_EVENTS) {
+      this.events = this.events.slice(0, this.MAX_EVENTS);
+    }
+    return event;
+  }
+  /**
+   * 获取所有事件
+   */
+  getEvents() {
+    return this.events;
+  }
+  /**
+   * 清除所有事件
+   */
+  clearEvents() {
+    this.events = [];
   }
   /**
    * 从路径提取项目名称
@@ -88,8 +134,14 @@ var SessionStore = class {
 var sessionStore = new SessionStore();
 
 // src/daemon/server.ts
+var __dirname = path.dirname(fileURLToPath(import.meta.url));
 var app = express();
 app.use(express.json());
+var publicPath = path.join(__dirname, "public");
+app.use("/dashboard", express.static(publicPath));
+app.get("/", (_req, res) => {
+  res.redirect("/dashboard");
+});
 function success(data) {
   return { success: true, data };
 }
@@ -156,8 +208,67 @@ app.delete("/api/sessions/:pid", (req, res) => {
 app.get("/api/health", (_req, res) => {
   res.json(success({ status: "ok", sessions: sessionStore.count }));
 });
+app.get("/api/events", (_req, res) => {
+  const events = sessionStore.getEvents();
+  res.json(success(events));
+});
 function createServer() {
-  return app;
+  const httpServer2 = createHttpServer(app);
+  return httpServer2;
+}
+
+// src/daemon/websocket.ts
+import { WebSocketServer, WebSocket } from "ws";
+var wss = null;
+var clients = /* @__PURE__ */ new Set();
+function initWebSocket(server) {
+  wss = new WebSocketServer({ server, path: "/ws" });
+  wss.on("connection", (ws) => {
+    clients.add(ws);
+    console.log(`WebSocket client connected. Total: ${clients.size}`);
+    sendMessage(ws, {
+      type: "init",
+      sessions: sessionStore.getAll(),
+      events: sessionStore.getEvents()
+    });
+    ws.on("message", (data) => {
+      try {
+        const msg = JSON.parse(data.toString());
+        handleClientMessage(ws, msg);
+      } catch (err) {
+        console.error("Failed to parse WebSocket message:", err);
+      }
+    });
+    ws.on("close", () => {
+      clients.delete(ws);
+      console.log(`WebSocket client disconnected. Total: ${clients.size}`);
+    });
+  });
+}
+function broadcast(message) {
+  const data = JSON.stringify(message);
+  clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  });
+}
+function sendMessage(ws, message) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(message));
+  }
+}
+function handleClientMessage(ws, msg) {
+  switch (msg.type) {
+    case "kill_session":
+      const session = sessionStore.get(msg.pid);
+      if (session) {
+        sessionStore.addEvent("killed", session);
+        sessionStore.delete(msg.pid);
+        broadcast({ type: "session_removed", pid: msg.pid });
+      }
+      break;
+  }
 }
 
 // src/notify/index.ts
@@ -241,17 +352,41 @@ function isProcessAlive(pid) {
 
 // src/daemon/index.ts
 var PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : DEFAULT_CONFIG.port;
-var app2 = createServer();
-var server = app2.listen(PORT, () => {
+var httpServer = createServer();
+initWebSocket(httpServer);
+var originalRegister = sessionStore.register.bind(sessionStore);
+var originalUpdate = sessionStore.update.bind(sessionStore);
+var originalDelete = sessionStore.delete.bind(sessionStore);
+sessionStore.register = (req) => {
+  const session = originalRegister(req);
+  broadcast({ type: "session_update", session });
+  return session;
+};
+sessionStore.update = (pid, status, message) => {
+  const session = originalUpdate(pid, status, message);
+  if (session) {
+    broadcast({ type: "session_update", session });
+  }
+  return session;
+};
+sessionStore.delete = (pid) => {
+  const result = originalDelete(pid);
+  if (result) {
+    broadcast({ type: "session_removed", pid });
+  }
+  return result;
+};
+httpServer.listen(PORT, () => {
   console.log(`Claude Monitor Daemon started on port ${PORT}`);
-  console.log(`API: http://localhost:${PORT}`);
+  console.log(`API: http://localhost:${PORT}/api`);
+  console.log(`Dashboard: http://localhost:${PORT}/dashboard`);
   console.log(`Health: http://localhost:${PORT}/api/health`);
   startZombieChecker(DEFAULT_CONFIG.checkInterval);
 });
 var shutdown = () => {
   console.log("Shutting down gracefully...");
   stopZombieChecker();
-  server.close(() => {
+  httpServer.close(() => {
     console.log("Server closed");
     process.exit(0);
   });

@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 
 // 静态文件服务 (Dashboard)
-const publicPath = path.join(__dirname, '../../dist/public');
+const publicPath = path.join(__dirname, 'public');
 app.use('/dashboard', express.static(publicPath));
 
 // 主页重定向到 Dashboard

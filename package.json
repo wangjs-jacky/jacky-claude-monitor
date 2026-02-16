@@ -9,7 +9,10 @@
   "scripts": {
     "dev:daemon": "tsx src/daemon/index.ts",
     "dev:cli": "tsx src/cli/index.ts",
+    "dev:web": "cd src/web && pnpm dev",
     "build": "tsup",
+    "build:web": "cd src/web && pnpm install && pnpm build",
+    "build:all": "pnpm build && pnpm build:web",
     "start": "node dist/daemon.js",
     "cli": "node dist/cli.js",
     "typecheck": "tsc --noEmit"
