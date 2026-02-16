@@ -1,5 +1,5 @@
 // src/daemon/store.ts
-import type { Session, RegisterSessionRequest, SessionStatus } from '../types.js';
+import type { Session, RegisterSessionRequest, SessionStatus, SessionEvent, SessionEventType } from '../types.js';
 
 /**
  * 会话存储管理器
@@ -7,6 +7,8 @@ import type { Session, RegisterSessionRequest, SessionStatus } from '../types.js
  */
 export class SessionStore {
   private sessions: Map<number, Session> = new Map();
+  private events: SessionEvent[] = [];
+  private readonly MAX_EVENTS = 100;
 
   /**
    * 注册新会话
@@ -27,6 +29,7 @@ export class SessionStore {
     };
 
     this.sessions.set(session.pid, session);
+    this.addEvent('started', session);
     return session;
   }
 
@@ -51,10 +54,18 @@ export class SessionStore {
     const session = this.sessions.get(pid);
     if (!session) return undefined;
 
+    const oldStatus = session.status;
     session.status = status;
     session.updatedAt = Date.now();
     if (message !== undefined) {
       session.message = message;
+    }
+
+    // 记录状态变更事件
+    if (status === 'waiting') {
+      this.addEvent('waiting', session);
+    } else if (oldStatus === 'waiting' && status === 'running') {
+      this.addEvent('resumed', session);
     }
 
     return session;
@@ -64,6 +75,10 @@ export class SessionStore {
    * 删除会话
    */
   delete(pid: number): boolean {
+    const session = this.sessions.get(pid);
+    if (session) {
+      this.addEvent('ended', session);
+    }
     return this.sessions.delete(pid);
   }
 
@@ -72,6 +87,43 @@ export class SessionStore {
    */
   get count(): number {
     return this.sessions.size;
+  }
+
+  /**
+   * 记录事件
+   */
+  addEvent(type: SessionEventType, session: Session): SessionEvent {
+    const event: SessionEvent = {
+      id: `${session.pid}-${Date.now()}`,
+      type,
+      pid: session.pid,
+      project: session.project,
+      timestamp: Date.now(),
+      message: session.message,
+    };
+
+    this.events.unshift(event);
+
+    // 保留最近 100 条事件
+    if (this.events.length > this.MAX_EVENTS) {
+      this.events = this.events.slice(0, this.MAX_EVENTS);
+    }
+
+    return event;
+  }
+
+  /**
+   * 获取所有事件
+   */
+  getEvents(): SessionEvent[] {
+    return this.events;
+  }
+
+  /**
+   * 清除所有事件
+   */
+  clearEvents(): void {
+    this.events = [];
   }
 
   /**
