@@ -3,8 +3,9 @@
 # Claude Code 会话开始时调用
 
 DAEMON_URL="http://localhost:17530"
-PID=$$
-PPID=$(ps -o ppid= -p $$ | tr -d ' ')
+# 使用父进程 ID 作为会话标识（所有 hooks 都由同一父进程启动）
+SESSION_PID=$PPID
+PARENT_PID=$(ps -o ppid= -p $$ | tr -d ' ')
 TERMINAL="${TERM_PROGRAM:-unknown}"
 CWD="$PWD"
 
@@ -12,8 +13,8 @@ CWD="$PWD"
 curl -s -X POST "$DAEMON_URL/api/sessions" \
   -H "Content-Type: application/json" \
   -d "{
-    \"pid\": $PID,
-    \"ppid\": $PPID,
+    \"pid\": $SESSION_PID,
+    \"ppid\": $PARENT_PID,
     \"terminal\": \"$TERMINAL\",
     \"cwd\": \"$CWD\"
   }" > /dev/null 2>&1

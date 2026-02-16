@@ -3,11 +3,12 @@
 # Claude Code 等待用户输入时调用 (PreToolUse - AskUserQuestion)
 
 DAEMON_URL="http://localhost:17530"
-PID=$$
+# 使用父进程 ID 作为会话标识
+SESSION_PID=$PPID
 PROJECT_NAME=$(basename "$PWD")
 
 # 更新会话状态为 waiting
-curl -s -X PATCH "$DAEMON_URL/api/sessions/$PID" \
+curl -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
   -H "Content-Type: application/json" \
   -d '{"status":"waiting","message":"等待用户输入"}' > /dev/null 2>&1
 
