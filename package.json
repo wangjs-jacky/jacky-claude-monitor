@@ -6,6 +6,11 @@
   "bin": {
     "claude-monitor": "./dist/cli.js"
   },
+  "files": [
+    "dist",
+    "hooks",
+    "swift-notify/main.swift"
+  ],
   "scripts": {
     "dev:daemon": "tsx src/daemon/index.ts",
     "dev:cli": "tsx src/cli/index.ts",
@@ -15,16 +20,22 @@
     "build:all": "pnpm build && pnpm build:web",
     "start": "node dist/daemon.js",
     "cli": "node dist/cli.js",
+    "prepublishOnly": "pnpm build",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "claude",
     "claude-code",
     "monitor",
-    "notification"
+    "notification",
+    "hooks"
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/你的用户名/jacky-claude-monitor.git"
+  },
   "dependencies": {
     "express": "^4.18.2",
     "ws": "^8.19.0"
@@ -36,5 +47,9 @@
     "tsup": "^8.0.1",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
-  }
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": ["darwin"]
 }

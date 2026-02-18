@@ -1,5 +1,5 @@
 import { Activity, Wifi, WifiOff } from 'lucide-react';
-import type { Session } from '../types';
+import type { Session, SessionStatus } from '../types';
 
 interface ControlPanelProps {
   sessions: Session[];
@@ -8,8 +8,10 @@ interface ControlPanelProps {
 }
 
 export function ControlPanel({ sessions, connected, port }: ControlPanelProps) {
-  const runningCount = sessions.filter((s) => s.status === 'running').length;
-  const waitingCount = sessions.filter((s) => s.status === 'waiting').length;
+  // 统计活跃会话（思考中或执行中）
+  const activeCount = sessions.filter((s) => s.status === 'thinking' || s.status === 'executing').length;
+  // 统计等待输入的会话
+  const waitingCount = sessions.filter((s) => s.status === 'waiting_input').length;
 
   return (
     <div className="bg-gray-800 rounded-lg p-4 mb-4">
@@ -39,7 +41,7 @@ export function ControlPanel({ sessions, connected, port }: ControlPanelProps) {
         <div className="flex items-center gap-4 text-sm">
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-green-400"></span>
-            运行: {runningCount}
+            活跃: {activeCount}
           </span>
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-yellow-400"></span>

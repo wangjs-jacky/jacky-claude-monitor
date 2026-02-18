@@ -1,7 +1,7 @@
 // src/daemon/websocket.ts
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
-import type { ServerMessage, ClientMessage } from '../types.js';
+import type { ServerMessage, ClientMessage, UserPrompt, ToolCall, Session } from '../types.js';
 import { sessionStore } from './store.js';
 
 let wss: WebSocketServer | null = null;
@@ -64,10 +64,9 @@ function sendMessage(ws: WebSocket, message: ServerMessage): void {
 /**
  * 处理客户端消息
  */
-function handleClientMessage(ws: WebSocket, msg: ClientMessage): void {
+function handleClientMessage(_ws: WebSocket, msg: ClientMessage): void {
   switch (msg.type) {
-    case 'kill_session':
-      // 删除会话
+    case 'kill_session': {
       const session = sessionStore.get(msg.pid);
       if (session) {
         sessionStore.addEvent('killed', session);
@@ -75,5 +74,46 @@ function handleClientMessage(ws: WebSocket, msg: ClientMessage): void {
         broadcast({ type: 'session_removed', pid: msg.pid });
       }
       break;
+    }
+    case 'subscribe':
+      // 客户端订阅更新，已经在初始化时发送数据
+      break;
   }
+}
+
+// ========== 增强功能：广播辅助函数 ==========
+
+/**
+ * 广播会话更新
+ */
+export function broadcastSessionUpdate(session: Session): void {
+  broadcast({ type: 'session_update', session });
+}
+
+/**
+ * 广播新用户提问
+ */
+export function broadcastNewPrompt(sessionId: number, prompt: UserPrompt): void {
+  broadcast({ type: 'new_prompt', sessionId, prompt });
+}
+
+/**
+ * 广播工具调用开始
+ */
+export function broadcastToolStart(sessionId: number, toolCall: ToolCall): void {
+  broadcast({ type: 'tool_start', sessionId, toolCall });
+}
+
+/**
+ * 广播工具调用结束
+ */
+export function broadcastToolEnd(sessionId: number, toolCallId: string, duration: number, success: boolean): void {
+  broadcast({ type: 'tool_end', sessionId, toolCallId, duration, success });
+}
+
+/**
+ * 广播会话移除
+ */
+export function broadcastSessionRemoved(pid: number): void {
+  broadcast({ type: 'session_removed', pid });
 }

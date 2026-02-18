@@ -116,6 +116,111 @@ Claude Code 会话 N ──┘                          │
 | **无守护进程** | 低 | 仅通知 | 只需要提醒，不关心会话管理 |
 | **有守护进程** | 中 | 通知 + 会话列表 + 僵尸检测 | 需要完整功能 |
 
+## 增强功能：过程监控
+
+### 可监控内容
+
+| 事件 | Hook | 可获取数据 | 说明 |
+|------|------|-----------|------|
+| 用户提问 | UserPromptSubmit | 用户输入的 prompt | 记录每次用户提交的问题 |
+| 工具调用 | PreToolUse | tool_name, tool_input | 记录 Claude 调用了什么工具 |
+| 工具完成 | PostToolUse | tool_name, success | 记录工具执行结果 |
+| 等待输入 | PreToolUse(AskUserQuestion) | 问题内容 | Claude 在问用户什么 |
+
+### 不可监控内容
+
+| 内容 | 原因 |
+|------|------|
+| Claude 的思考过程 | Claude Code 不暴露内部推理 |
+| 中间推理步骤 | API 不返回 |
+| Token 使用量 | 需要单独查询 API |
+
+### 增强数据模型
+
+```typescript
+// 用户提问记录
+interface UserPrompt {
+  id: string;
+  sessionId: number;      // 关联的会话 PID
+  prompt: string;         // 用户输入内容
+  timestamp: number;      // 提交时间
+}
+
+// 工具调用记录
+interface ToolCall {
+  id: string;
+  sessionId: number;      // 关联的会话 PID
+  tool: string;           // 工具名称: Read, Edit, Bash, Grep...
+  input: Record<string, unknown>;  // 工具输入参数
+  status: 'pending' | 'success' | 'error';
+  startedAt: number;      // 开始时间
+  completedAt?: number;   // 完成时间
+  duration?: number;      // 耗时 (ms)
+}
+
+// 增强后的会话信息
+interface Session {
+  // ... 原有字段
+
+  // 新增字段
+  currentPrompt?: string;     // 当前正在处理的问题
+  promptHistory: UserPrompt[]; // 提问历史 (最近 10 条)
+  toolHistory: ToolCall[];    // 工具调用历史 (最近 50 条)
+  toolStats: {
+    totalCalls: number;       // 总调用次数
+    byTool: Record<string, number>;  // 按工具统计
+  };
+}
+```
+
+### 监控面板示意
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  claude-monitor list --verbose                                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Session: my-project (PID: 12345)                               │
+│  终端: iTerm2  |  状态: 运行中  |  启动: 5分钟前                 │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ 当前问题:                                                │    │
+│  │ "帮我实现用户登录功能，包括 JWT 认证"                    │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ 最近工具调用:                                            │    │
+│  │ 14:32:01 ✓ Read    src/auth.ts              (120ms)     │    │
+│  │ 14:32:03 ✓ Grep    "login" src/              (450ms)     │    │
+│  │ 14:32:08 ✓ Edit    src/auth.ts              (80ms)      │    │
+│  │ 14:32:12 ⏳ Bash   npm test                  ...         │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                  │
+│  统计: 3 次提问 | 15 次工具调用 | 运行 5 分钟                    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 实时状态更新
+
+通过 WebSocket 实现实时推送：
+
+```typescript
+// 服务端 → 客户端
+type ServerMessage =
+  | { type: 'init'; sessions: Session[] }
+  | { type: 'session_update'; session: Session }
+  | { type: 'new_prompt'; sessionId: number; prompt: string }
+  | { type: 'tool_start'; sessionId: number; tool: string; input: object }
+  | { type: 'tool_end'; sessionId: number; tool: string; duration: number }
+  | { type: 'session_removed'; pid: number };
+
+// 客户端 → 服务端
+type ClientMessage =
+  | { type: 'subscribe' }
+  | { type: 'kill_session'; pid: number };
+```
+
 ## 技术栈
 
 | 组件 | 技术 | 说明 |
@@ -148,8 +253,11 @@ jacky-claude-monitor/
 ├── hooks/                     # Claude Code Hooks (Shell)
 │   ├── session-start.sh       # 会话开始
 │   ├── session-end.sh         # 会话结束
-│   ├── prompt-submit.sh       # 用户提交提示
-│   └── waiting-input.sh       # 等待用户输入
+│   ├── prompt-submit.sh       # 用户提交提问
+│   ├── waiting-input.sh       # 等待用户输入
+│   ├── input-answered.sh      # 用户已响应
+│   ├── tool-start.sh          # 工具调用开始
+│   └── tool-end.sh            # 工具调用结束
 │
 ├── dist/                      # 构建产物
 │   ├── daemon.js
@@ -198,6 +306,8 @@ type SessionStatus = 'running' | 'waiting' | 'ended';
 
 **基础 URL**: `http://localhost:17530`
 
+#### 会话管理
+
 | 方法 | 路径 | 说明 | 请求体 |
 |------|------|------|--------|
 | POST | `/api/sessions` | 注册会话 | `{ pid, ppid, terminal, cwd }` |
@@ -206,6 +316,23 @@ type SessionStatus = 'running' | 'waiting' | 'ended';
 | PATCH | `/api/sessions/:pid` | 更新会话状态 | `{ status, message? }` |
 | DELETE | `/api/sessions/:pid` | 注销会话 | - |
 | GET | `/api/health` | 健康检查 | - |
+| GET | `/api/events` | 获取事件历史 | - |
+
+#### 用户提问记录 (增强功能)
+
+| 方法 | 路径 | 说明 | 请求体 |
+|------|------|------|--------|
+| POST | `/api/sessions/:pid/prompts` | 记录用户提问 | `{ prompt }` |
+| GET | `/api/sessions/:pid/prompts` | 获取提问历史 | - |
+
+#### 工具调用记录 (增强功能)
+
+| 方法 | 路径 | 说明 | 请求体 |
+|------|------|------|--------|
+| POST | `/api/sessions/:pid/tools` | 开始工具调用 | `{ tool, input }` |
+| PATCH | `/api/sessions/:pid/tools/:toolCallId` | 结束工具调用 | `{ success, error? }` |
+| GET | `/api/sessions/:pid/tools` | 获取工具调用历史 | - |
+| GET | `/api/sessions/:pid/stats` | 获取统计数据 | - |
 
 ### 请求示例
 
@@ -432,16 +559,30 @@ claude-monitor logs --follow     # 实时查看
         "hooks": [{ "type": "command", "command": "~/.claude-monitor/hooks/session-end.sh" }]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "~/.claude-monitor/hooks/prompt-submit.sh" }]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "AskUserQuestion",
         "hooks": [{ "type": "command", "command": "~/.claude-monitor/hooks/waiting-input.sh" }]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [{ "type": "command", "command": "~/.claude-monitor/hooks/tool-start.sh" }]
       }
     ],
     "PostToolUse": [
       {
         "matcher": "AskUserQuestion",
         "hooks": [{ "type": "command", "command": "~/.claude-monitor/hooks/input-answered.sh" }]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [{ "type": "command", "command": "~/.claude-monitor/hooks/tool-end.sh" }]
       }
     ]
   }

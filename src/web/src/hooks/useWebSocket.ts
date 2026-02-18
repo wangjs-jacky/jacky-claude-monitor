@@ -1,9 +1,11 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import type { Session, SessionEvent, ServerMessage, ClientMessage } from '../types';
+import type { Session, SessionEvent, UserPrompt, ToolCall, ServerMessage, ClientMessage } from '../types';
 
 interface UseWebSocketReturn {
   sessions: Session[];
   events: SessionEvent[];
+  prompts: Map<number, UserPrompt[]>;
+  toolCalls: Map<number, ToolCall[]>;
   connected: boolean;
   killSession: (pid: number) => void;
 }
@@ -11,6 +13,8 @@ interface UseWebSocketReturn {
 export function useWebSocket(): UseWebSocketReturn {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [events, setEvents] = useState<SessionEvent[]>([]);
+  const [prompts, setPrompts] = useState<Map<number, UserPrompt[]>>(new Map());
+  const [toolCalls, setToolCalls] = useState<Map<number, ToolCall[]>>(new Map());
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -65,9 +69,49 @@ export function useWebSocket(): UseWebSocketReturn {
         break;
       case 'session_removed':
         setSessions((prev) => prev.filter((s) => s.pid !== msg.pid));
+        // 清理该会话的提问和工具调用记录
+        setPrompts((prev) => {
+          const next = new Map(prev);
+          next.delete(msg.pid);
+          return next;
+        });
+        setToolCalls((prev) => {
+          const next = new Map(prev);
+          next.delete(msg.pid);
+          return next;
+        });
         break;
       case 'new_event':
         setEvents((prev) => [msg.event, ...prev].slice(0, 100));
+        break;
+      case 'new_prompt':
+        setPrompts((prev) => {
+          const next = new Map(prev);
+          const existing = next.get(msg.sessionId) || [];
+          next.set(msg.sessionId, [msg.prompt, ...existing].slice(0, 10));
+          return next;
+        });
+        break;
+      case 'tool_start':
+        setToolCalls((prev) => {
+          const next = new Map(prev);
+          const existing = next.get(msg.sessionId) || [];
+          next.set(msg.sessionId, [msg.toolCall, ...existing].slice(0, 50));
+          return next;
+        });
+        break;
+      case 'tool_end':
+        setToolCalls((prev) => {
+          const next = new Map(prev);
+          const existing = next.get(msg.sessionId) || [];
+          const updated = existing.map((tc) =>
+            tc.id === msg.toolCallId
+              ? { ...tc, status: (msg.success ? 'success' : 'error') as 'success' | 'error', duration: msg.duration }
+              : tc
+          );
+          next.set(msg.sessionId, updated);
+          return next;
+        });
         break;
     }
   }, []);
@@ -86,5 +130,5 @@ export function useWebSocket(): UseWebSocketReturn {
     };
   }, [connect]);
 
-  return { sessions, events, connected, killSession };
+  return { sessions, events, prompts, toolCalls, connected, killSession };
 }
