@@ -321,6 +321,7 @@ ${colors.bold}${colors.cyan}╔════════════════�
     'input-answered.sh',
     'tool-start.sh',
     'tool-end.sh',
+    'notification.sh',
   ];
 
   // 如果 npm 包中的 hooks 不存在，尝试从当前目录复制
@@ -457,6 +458,9 @@ function showHooksConfig(): void {
       PostToolUse: [
         { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: '~/.claude-monitor/hooks/input-answered.sh' }] },
         { matcher: '', hooks: [{ type: 'command', command: '~/.claude-monitor/hooks/tool-end.sh' }] }
+      ],
+      Notification: [
+        { matcher: '', hooks: [{ type: 'command', command: '~/.claude-monitor/hooks/notification.sh' }] }
       ]
     }
   };
