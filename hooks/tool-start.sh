@@ -11,6 +11,9 @@ SESSION_PID=$PPID
 PROJECT_NAME=$(basename "$PWD")
 TERMINAL="${TERM_PROGRAM:-vscode}"
 
+# 标记文件目录
+MARKER_DIR="/tmp/claude-monitor"
+
 # 从 stdin 读取 JSON 数据
 INPUT=$(cat)
 
@@ -26,6 +29,10 @@ fi
 
 # 如果有 tool 名称，发送到守护进程
 if [ -n "$TOOL" ]; then
+  # 标记工具调用开始（用于延迟弹窗检测）
+  mkdir -p "$MARKER_DIR"
+  echo "$SESSION_PID" > "$MARKER_DIR/tool_active_$SESSION_PID"
+
   # 更新状态为 executing
   curl -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
     -H "Content-Type: application/json" \

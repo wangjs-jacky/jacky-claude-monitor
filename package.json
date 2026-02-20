@@ -1,5 +1,5 @@
 {
-  "name": "claude-code-monitor",
+  "name": "@wangjs-jacky/claude-monitor",
   "version": "0.1.0",
   "description": "监控所有 Claude Code 会话，当等待输入或会话结束时通知用户",
   "type": "module",
@@ -30,11 +30,11 @@
     "notification",
     "hooks"
   ],
-  "author": "",
+  "author": "wangjs-jacky",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/你的用户名/jacky-claude-monitor.git"
+    "url": "https://github.com/wangjs-jacky/jacky-claude-monitor.git"
   },
   "dependencies": {
     "express": "^4.18.2",
