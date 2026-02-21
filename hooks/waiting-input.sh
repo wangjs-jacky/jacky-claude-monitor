@@ -11,7 +11,7 @@ PROJECT_NAME=$(basename "$PWD")
 TERMINAL="${TERM_PROGRAM:-vscode}"
 
 # 更新会话状态为 waiting_input
-curl -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
+curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
   -H "Content-Type: application/json" \
   -d '{"status":"waiting_input","message":"等待用户输入"}' > /dev/null 2>&1
 

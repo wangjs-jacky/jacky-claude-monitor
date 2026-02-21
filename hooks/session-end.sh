@@ -12,7 +12,7 @@ PROJECT_NAME=$(basename "$PWD")
 TERMINAL="${TERM_PROGRAM:-vscode}"
 
 # 从守护进程注销
-curl -s -X DELETE "$DAEMON_URL/api/sessions/$SESSION_PID" > /dev/null 2>&1
+curl --noproxy "*" -s -X DELETE "$DAEMON_URL/api/sessions/$SESSION_PID" > /dev/null 2>&1
 
 # 检查是否启用悬浮窗
 if is_scenario_enabled "sessionEnd"; then

@@ -39,13 +39,13 @@ if [ -n "$TOOL_CALL_ID" ]; then
     ERROR_PART=",\"error\":\"$ESCAPED_ERROR\""
   fi
 
-  curl -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID/tools/$TOOL_CALL_ID" \
+  curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID/tools/$TOOL_CALL_ID" \
     -H "Content-Type: application/json" \
     -d "{\"success\":$SUCCESS$ERROR_PART}" > /dev/null 2>&1
 fi
 
 # 更新状态为 done（LLM 输出完成）
-curl -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
+curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
   -H "Content-Type: application/json" \
   -d '{"status":"done","message":""}' > /dev/null 2>&1
 

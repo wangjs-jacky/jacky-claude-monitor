@@ -28,12 +28,12 @@ if [ -n "$PROMPT" ]; then
   ESCAPED_PROMPT=$(echo "$PROMPT" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\n/\\n/g')
 
   # 更新状态为 thinking
-  curl -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
+  curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
     -H "Content-Type: application/json" \
     -d '{"status":"thinking"}' > /dev/null 2>&1
 
   # 记录提问
-  curl -s -X POST "$DAEMON_URL/api/sessions/$SESSION_PID/prompts" \
+  curl --noproxy "*" -s -X POST "$DAEMON_URL/api/sessions/$SESSION_PID/prompts" \
     -H "Content-Type: application/json" \
     -d "{\"prompt\":\"$ESCAPED_PROMPT\"}" > /dev/null 2>&1
 

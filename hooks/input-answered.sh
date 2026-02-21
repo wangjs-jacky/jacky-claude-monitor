@@ -16,7 +16,7 @@ pkill -9 -f "claude-float-window.*waiting_input" 2>/dev/null || true
 pgrep -f "waiting_input" | xargs kill -9 2>/dev/null || true
 
 # 更新会话状态为 thinking，并清除消息
-curl -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
+curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
   -H "Content-Type: application/json" \
   -d '{"status":"thinking","message":""}' > /dev/null 2>&1
 

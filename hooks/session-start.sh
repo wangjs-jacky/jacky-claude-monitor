@@ -10,7 +10,7 @@ TERMINAL="${TERM_PROGRAM:-unknown}"
 CWD="$PWD"
 
 # 发送到守护进程
-curl -s -X POST "$DAEMON_URL/api/sessions" \
+curl --noproxy "*" -s -X POST "$DAEMON_URL/api/sessions" \
   -H "Content-Type: application/json" \
   -d "{
     \"pid\": $SESSION_PID,

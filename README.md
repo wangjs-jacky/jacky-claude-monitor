@@ -18,10 +18,10 @@
 
 ```bash
 # 安装 hooks 和悬浮窗
-npx claude-code-monitor init
+npx @wangjs-jacky/claude-monitor init
 
 # 查看配置信息
-npx claude-code-monitor config
+npx @wangjs-jacky/claude-monitor config
 ```
 
 ### 方式二：Prompt 安装
@@ -32,11 +32,11 @@ npx claude-code-monitor config
 请帮我安装 Claude Code Monitor。
 
 1. 创建目录：mkdir -p ~/.claude-monitor/hooks
-2. 从 https://github.com/你的用户名/jacky-claude-monitor/tree/main/hooks 下载所有 .sh 文件到 ~/.claude-monitor/hooks/
+2. 从 https://github.com/wangjs-jacky/jacky-claude-monitor/tree/main/hooks 下载所有 .sh 文件到 ~/.claude-monitor/hooks/
 3. 下载并编译 Swift 悬浮窗：
-   curl -o /tmp/main.swift https://raw.githubusercontent.com/你的用户名/jacky-claude-monitor/main/swift-notify/main.swift
+   curl -o /tmp/main.swift https://raw.githubusercontent.com/wangjs-jacky/jacky-claude-monitor/main/swift-notify/main.swift
    swiftc -o ~/.claude-monitor/claude-float-window /tmp/main.swift -framework Cocoa
-4. 配置 Claude Code Hooks（运行 npx claude-code-monitor config 查看配置）
+4. 配置 Claude Code Hooks（运行 npx @wangjs-jacky/claude-monitor config 查看配置）
 ```
 
 ### 方式三：Skill 安装
@@ -51,7 +51,7 @@ npx claude-code-monitor config
 
 ```bash
 # 克隆仓库
-git clone https://github.com/你的用户名/jacky-claude-monitor.git
+git clone https://github.com/wangjs-jacky/jacky-claude-monitor.git
 cd jacky-claude-monitor
 
 # 运行本地安装脚本

@@ -34,12 +34,12 @@ if [ -n "$TOOL" ]; then
   echo "$SESSION_PID" > "$MARKER_DIR/tool_active_$SESSION_PID"
 
   # 更新状态为 executing
-  curl -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
+  curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
     -H "Content-Type: application/json" \
     -d '{"status":"executing"}' > /dev/null 2>&1
 
   # 记录工具调用
-  curl -s -X POST "$DAEMON_URL/api/sessions/$SESSION_PID/tools" \
+  curl --noproxy "*" -s -X POST "$DAEMON_URL/api/sessions/$SESSION_PID/tools" \
     -H "Content-Type: application/json" \
     -d "{\"tool\":\"$TOOL\",\"input\":$TOOL_INPUT}" > /dev/null 2>&1
 

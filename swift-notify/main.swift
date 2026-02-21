@@ -273,10 +273,6 @@ class FloatingWindow: NSWindow {
     }
 
     private func setupGestures() {
-        // 点击关闭
-        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleClick))
-        contentView?.addGestureRecognizer(clickGesture)
-
         // 悬停效果
         let trackingArea = NSTrackingArea(
             rect: contentView?.bounds ?? .zero,
@@ -301,31 +297,14 @@ class FloatingWindow: NSWindow {
         }
     }
 
-    @objc private func handleClick() {
+    // 直接在窗口级别处理鼠标点击
+    override func mouseDown(with event: NSEvent) {
         closeWithAnimation()
     }
 
     private func closeWithAnimation() {
-        let originalFrame = self.frame
-        let scaledFrame = NSRect(
-            x: originalFrame.origin.x + 10,
-            y: originalFrame.origin.y - 10,
-            width: originalFrame.width - 20,
-            height: originalFrame.height - 20
-        )
-
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            self.animator().alphaValue = 0
-            self.animator().setFrame(scaledFrame, display: true)
-        }
-
-        // 使用延时确保动画完成后再关闭
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            self.close()
-            NSApp.terminate(nil)
-        }
+        // 直接退出，不做任何动画
+        exit(0)
     }
 }
 

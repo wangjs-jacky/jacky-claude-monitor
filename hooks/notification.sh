@@ -27,7 +27,7 @@ else
 fi
 
 # 更新会话状态为 waiting_input
-curl -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
+curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
   -H "Content-Type: application/json" \
   -d "{\"status\":\"waiting_input\",\"message\":\"$MESSAGE\"}" > /dev/null 2>&1
 
