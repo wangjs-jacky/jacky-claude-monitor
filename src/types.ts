@@ -7,20 +7,28 @@ export type TerminalType = 'vscode' | 'iterm' | 'warp' | 'terminal' | 'unknown';
 
 // 会话状态（增强版）
 export type SessionStatus =
-  | 'idle'           // 空闲，等待用户输入
-  | 'thinking'       // 正在思考/推理
-  | 'executing'      // 正在执行工具
-  | 'waiting_input'  // 等待用户交互 (AskUserQuestion)
-  | 'done'           // 回答完成
-  | 'ended';         // 会话结束
+  | 'idle'             // 空闲，等待用户输入
+  | 'thinking'         // 正在思考/推理
+  | 'executing'        // 正在执行单个工具
+  | 'multi_executing'  // 正在并行执行多个工具
+  | 'streaming'        // LLM 正在输出文本
+  | 'waiting_input'    // 等待用户交互 (AskUserQuestion)
+  | 'tool_done'        // 单个工具完成
+  | 'completed'        // 整个任务完成
+  | 'error'            // 执行出错
+  | 'ended';           // 会话结束
 
 // 状态显示配置
 export const STATUS_CONFIG: Record<SessionStatus, { icon: string; label: string; color: string }> = {
   idle: { icon: '💤', label: '空闲', color: 'dim' },
   thinking: { icon: '🧠', label: '思考中', color: 'yellow' },
   executing: { icon: '⚙️', label: '执行中', color: 'cyan' },
+  multi_executing: { icon: '⚡', label: '并行执行', color: 'cyan' },
+  streaming: { icon: '📝', label: '输出中', color: 'green' },
   waiting_input: { icon: '⏳', label: '等待输入', color: 'yellow' },
-  done: { icon: '✅', label: '完成', color: 'green' },
+  tool_done: { icon: '✓', label: '工具完成', color: 'dim' },
+  completed: { icon: '✅', label: '完成', color: 'green' },
+  error: { icon: '❌', label: '出错', color: 'red' },
   ended: { icon: '🛑', label: '已结束', color: 'red' },
 };
 
@@ -44,6 +52,12 @@ export interface Session {
   updatedAt: number;
   /** 等待原因 (status 为 waiting 时) */
   message?: string;
+  /** 当前执行的工具名称 */
+  currentTool?: string;
+  /** 并行执行的工具数量 */
+  activeToolsCount?: number;
+  /** 正在执行的工具列表 */
+  activeTools?: string[];
 }
 
 // 注册会话请求

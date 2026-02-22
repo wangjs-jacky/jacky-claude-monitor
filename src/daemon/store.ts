@@ -26,6 +26,7 @@ export class SessionStore {
   private prompts: Map<number, UserPrompt[]> = new Map();  // sessionId -> prompts
   private toolCalls: Map<number, ToolCall[]> = new Map();   // sessionId -> toolCalls
   private pendingTools: Map<string, ToolCall> = new Map();   // toolCallId -> ToolCall
+  private activeToolsBySession: Map<number, Map<string, string>> = new Map();  // sessionId -> (toolCallId -> toolName)
 
   private readonly MAX_PROMPTS_PER_SESSION = 10;
   private readonly MAX_TOOL_CALLS_PER_SESSION = 50;
@@ -182,7 +183,23 @@ export class SessionStore {
     }
     this.toolCalls.set(sessionId, toolCalls);
 
+    // 更新活动工具列表
+    let activeTools = this.activeToolsBySession.get(sessionId) || new Map();
+    activeTools.set(toolCall.id, request.tool);
+    this.activeToolsBySession.set(sessionId, activeTools);
+
+    // 更新会话状态和工具信息
     session.updatedAt = Date.now();
+    session.activeToolsCount = activeTools.size;
+    session.activeTools = Array.from(activeTools.values());
+    session.currentTool = request.tool;
+
+    // 根据活动工具数量设置状态
+    if (activeTools.size === 1) {
+      session.status = 'executing';
+    } else {
+      session.status = 'multi_executing';
+    }
 
     return toolCall;
   }
@@ -193,6 +210,9 @@ export class SessionStore {
   endToolCall(toolCallId: string, request: ToolEndRequest): ToolCall | undefined {
     const toolCall = this.pendingTools.get(toolCallId);
     if (!toolCall) return undefined;
+
+    const sessionId = toolCall.sessionId;
+    const session = this.sessions.get(sessionId);
 
     // 更新状态
     toolCall.status = request.success ? 'success' : 'error';
@@ -205,8 +225,30 @@ export class SessionStore {
     // 从待完成列表移除
     this.pendingTools.delete(toolCallId);
 
+    // 更新活动工具列表
+    const activeTools = this.activeToolsBySession.get(sessionId);
+    if (activeTools) {
+      activeTools.delete(toolCallId);
+
+      if (session) {
+        session.activeToolsCount = activeTools.size;
+        session.activeTools = Array.from(activeTools.values());
+
+        // 更新状态
+        if (activeTools.size === 0) {
+          // 所有工具完成
+          session.status = request.success ? 'tool_done' : 'error';
+          session.currentTool = undefined;
+        } else if (activeTools.size === 1) {
+          session.status = 'executing';
+          session.currentTool = activeTools.values().next().value;
+        }
+        // multi_executing 状态保持不变
+      }
+    }
+
     // 更新会话历史中的记录
-    const sessionTools = this.toolCalls.get(toolCall.sessionId);
+    const sessionTools = this.toolCalls.get(sessionId);
     if (sessionTools) {
       const index = sessionTools.findIndex(t => t.id === toolCallId);
       if (index !== -1) {

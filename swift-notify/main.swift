@@ -53,6 +53,22 @@ let STATUS_CONFIG: [String: StatusConfig] = [
         gradientStart: NSColor(red: 0.08, green: 0.14, blue: 0.18, alpha: 0.92),
         gradientEnd: NSColor(red: 0.04, green: 0.10, blue: 0.14, alpha: 0.95)
     ),
+    "multi_executing": StatusConfig(
+        icon: "⚡",
+        title: "并行执行",
+        accentColor: NSColor(red: 0.5, green: 0.9, blue: 1.0, alpha: 1.0),
+        glowColor: NSColor(red: 0.4, green: 0.8, blue: 1.0, alpha: 0.5),
+        gradientStart: NSColor(red: 0.10, green: 0.16, blue: 0.20, alpha: 0.92),
+        gradientEnd: NSColor(red: 0.06, green: 0.12, blue: 0.16, alpha: 0.95)
+    ),
+    "streaming": StatusConfig(
+        icon: "📝",
+        title: "输出中",
+        accentColor: NSColor(red: 0.5, green: 0.9, blue: 0.6, alpha: 1.0),
+        glowColor: NSColor(red: 0.4, green: 0.85, blue: 0.5, alpha: 0.4),
+        gradientStart: NSColor(red: 0.10, green: 0.18, blue: 0.12, alpha: 0.92),
+        gradientEnd: NSColor(red: 0.06, green: 0.14, blue: 0.08, alpha: 0.95)
+    ),
     "waiting_input": StatusConfig(
         icon: "⏳",
         title: "等待输入",
@@ -60,6 +76,30 @@ let STATUS_CONFIG: [String: StatusConfig] = [
         glowColor: NSColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 0.5),
         gradientStart: NSColor(red: 0.18, green: 0.12, blue: 0.06, alpha: 0.92),
         gradientEnd: NSColor(red: 0.14, green: 0.08, blue: 0.03, alpha: 0.95)
+    ),
+    "tool_done": StatusConfig(
+        icon: "✓",
+        title: "工具完成",
+        accentColor: NSColor(white: 0.6, alpha: 1.0),
+        glowColor: NSColor(white: 0.4, alpha: 0.3),
+        gradientStart: NSColor(white: 0.16, alpha: 0.92),
+        gradientEnd: NSColor(white: 0.10, alpha: 0.95)
+    ),
+    "completed": StatusConfig(
+        icon: "✅",
+        title: "完成",
+        accentColor: NSColor(red: 0.4, green: 0.9, blue: 0.5, alpha: 1.0),
+        glowColor: NSColor(red: 0.3, green: 0.85, blue: 0.4, alpha: 0.4),
+        gradientStart: NSColor(red: 0.08, green: 0.18, blue: 0.10, alpha: 0.92),
+        gradientEnd: NSColor(red: 0.04, green: 0.14, blue: 0.06, alpha: 0.95)
+    ),
+    "error": StatusConfig(
+        icon: "❌",
+        title: "出错",
+        accentColor: NSColor(red: 1.0, green: 0.4, blue: 0.4, alpha: 1.0),
+        glowColor: NSColor(red: 1.0, green: 0.3, blue: 0.3, alpha: 0.5),
+        gradientStart: NSColor(red: 0.18, green: 0.08, blue: 0.08, alpha: 0.92),
+        gradientEnd: NSColor(red: 0.14, green: 0.04, blue: 0.04, alpha: 0.95)
     ),
     "done": StatusConfig(
         icon: "✅",
@@ -243,7 +283,7 @@ class FloatingWindow: NSWindow {
         }
 
         // 进度指示器（思考/执行时显示）
-        if config.status == "thinking" || config.status == "executing" {
+        if config.status == "thinking" || config.status == "executing" || config.status == "multi_executing" || config.status == "streaming" {
             progressIndicator = NSProgressIndicator(frame: NSRect(x: 264, y: 64, width: 18, height: 18))
             progressIndicator.style = .spinning
             progressIndicator.controlSize = .small

@@ -31,7 +31,16 @@ else
   TOOL_CALL_ID=""
 fi
 
-# 如果有 tool_call_id，更新状态
+# 尝试从临时文件获取 toolCallId
+if [ -z "$TOOL_CALL_ID" ] && [ -n "$TOOL" ]; then
+  TOOL_ID_FILE="$MARKER_DIR/tool_id_${SESSION_PID}_${TOOL}"
+  if [ -f "$TOOL_ID_FILE" ]; then
+    TOOL_CALL_ID=$(cat "$TOOL_ID_FILE")
+    rm -f "$TOOL_ID_FILE" 2>/dev/null
+  fi
+fi
+
+# 如果有 tool_call_id，更新状态（守护进程会自动更新会话状态）
 if [ -n "$TOOL_CALL_ID" ]; then
   ERROR_PART=""
   if [ -n "$ERROR" ]; then
@@ -39,30 +48,26 @@ if [ -n "$TOOL_CALL_ID" ]; then
     ERROR_PART=",\"error\":\"$ESCAPED_ERROR\""
   fi
 
-  curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID/tools/$TOOL_CALL_ID" \
+  RESPONSE=$(curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID/tools/$TOOL_CALL_ID" \
     -H "Content-Type: application/json" \
-    -d "{\"success\":$SUCCESS$ERROR_PART}" > /dev/null 2>&1
-fi
+    -d "{\"success\":$SUCCESS$ERROR_PART}" 2>/dev/null)
 
-# 更新状态为 done（LLM 输出完成）
-curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
-  -H "Content-Type: application/json" \
-  -d '{"status":"done","message":""}' > /dev/null 2>&1
+  # 检查会话状态，如果所有工具完成则显示弹窗
+  SESSION_STATUS=$(curl --noproxy "*" -s "$DAEMON_URL/api/sessions/$SESSION_PID" 2>/dev/null | jq -r '.data.status // empty')
 
-# 删除工具调用标记
-rm -f "$MARKER_FILE" 2>/dev/null
-
-# 显示完成弹窗（延迟 1 秒，检测是否有新的工具调用）
-if is_scenario_enabled "sessionEnd"; then
-  DURATION=$(get_scenario_duration "sessionEnd" 3)
-  (
-    sleep 1
-    # 检查是否有新的工具调用开始（标记文件是否重新创建）
-    if [ ! -f "$MARKER_FILE" ]; then
-      ~/.claude-monitor/claude-float-window done "$PROJECT_NAME" "任务完成" "$TERMINAL" "$DURATION"
+  if [ "$SESSION_STATUS" = "tool_done" ]; then
+    # 所有工具完成，显示工具完成弹窗（但不显示任务完成）
+    if is_scenario_enabled "executing"; then
+      DURATION=1  # 短暂显示
+      ~/.claude-monitor/claude-float-window tool_done "$PROJECT_NAME" "✓ $TOOL 完成" "$TERMINAL" "$DURATION" &
     fi
-  ) &
-  disown 2>/dev/null || true
+  elif [ "$SESSION_STATUS" = "error" ]; then
+    # 出错
+    if is_scenario_enabled "executing"; then
+      DURATION=2
+      ~/.claude-monitor/claude-float-window error "$PROJECT_NAME" "✗ $TOOL 失败" "$TERMINAL" "$DURATION" &
+    fi
+  fi
 fi
 
 exit 0
