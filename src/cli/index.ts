@@ -4,14 +4,49 @@ import { promisify } from 'util';
 import { existsSync, mkdirSync, copyFileSync, chmodSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import http from 'http';
 import { DEFAULT_CONFIG, STATUS_CONFIG, type SessionStatus, type Config } from '../types.js';
 import { loadConfig, saveConfig, getConfigPath, resetConfig } from '../config/index.js';
 
 const execAsync = promisify(exec);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const DAEMON_URL = `http://localhost:${DEFAULT_CONFIG.port}`;
+const DAEMON_URL = `http://127.0.0.1:${DEFAULT_CONFIG.port}`;
 const INSTALL_DIR = join(process.env.HOME || '', '.claude-monitor');
+
+/**
+ * 绕过代理的 HTTP 请求（解决系统代理导致 localhost 连接失败的问题）
+ * 使用 Node.js 原生 http 模块，不受代理环境变量影响
+ */
+async function fetchNoProxy<T>(url: string): Promise<{ ok: boolean; json: () => Promise<T> }> {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || 80,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: 'GET',
+    };
+
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        resolve({
+          ok: res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 300,
+          json: async () => JSON.parse(data) as T,
+        });
+      });
+    });
+
+    req.on('error', reject);
+    req.setTimeout(5000, () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+    req.end();
+  });
+}
 
 // ANSI 颜色
 const colors = {
@@ -64,7 +99,7 @@ function getColorCode(color: string): string {
  */
 async function isDaemonRunning(): Promise<boolean> {
   try {
-    const response = await fetch(`${DAEMON_URL}/api/health`);
+    const response = await fetchNoProxy(`${DAEMON_URL}/api/health`);
     return response.ok;
   } catch {
     return false;
@@ -84,10 +119,11 @@ async function startCommand(): Promise<void> {
   logInfo('正在启动守护进程...');
 
   // 使用 spawn 后台运行
-  const daemon = spawn('node', ['dist/daemon.js'], {
+  // __dirname 指向 dist/ 目录（因为 CLI 入口是 dist/cli.js）
+  const daemon = spawn('node', ['daemon.js'], {
     detached: true,
     stdio: 'ignore',
-    cwd: process.cwd(),
+    cwd: __dirname,
   });
 
   daemon.unref();
@@ -143,7 +179,7 @@ async function statusCommand(): Promise<void> {
   }
 
   try {
-    const response = await fetch(`${DAEMON_URL}/api/health`);
+    const response = await fetchNoProxy(`${DAEMON_URL}/api/health`);
     const data = (await response.json()) as { success: boolean; data: { status: string; sessions: number } };
 
     if (data.success) {
@@ -167,7 +203,7 @@ async function listCommand(verbose: boolean = false): Promise<void> {
   }
 
   try {
-    const response = await fetch(`${DAEMON_URL}/api/sessions`);
+    const response = await fetchNoProxy(`${DAEMON_URL}/api/sessions`);
     const data = (await response.json()) as { success: boolean; data: Array<{
       pid: number;
       project: string;
@@ -218,7 +254,7 @@ async function listCommand(verbose: boolean = false): Promise<void> {
 async function showSessionDetails(pid: number): Promise<void> {
   try {
     // 获取提问历史
-    const promptsResponse = await fetch(`${DAEMON_URL}/api/sessions/${pid}/prompts`);
+    const promptsResponse = await fetchNoProxy(`${DAEMON_URL}/api/sessions/${pid}/prompts`);
     const promptsData = (await promptsResponse.json()) as { success: boolean; data: Array<{ prompt: string; timestamp: number }> };
 
     if (promptsData.success && promptsData.data.length > 0) {
@@ -230,7 +266,7 @@ async function showSessionDetails(pid: number): Promise<void> {
     }
 
     // 获取工具调用历史
-    const toolsResponse = await fetch(`${DAEMON_URL}/api/sessions/${pid}/tools`);
+    const toolsResponse = await fetchNoProxy(`${DAEMON_URL}/api/sessions/${pid}/tools`);
     const toolsData = (await toolsResponse.json()) as { success: boolean; data: Array<{
       tool: string;
       status: string;
@@ -247,7 +283,7 @@ async function showSessionDetails(pid: number): Promise<void> {
       }
 
       // 统计
-      const statsResponse = await fetch(`${DAEMON_URL}/api/sessions/${pid}/stats`);
+      const statsResponse = await fetchNoProxy(`${DAEMON_URL}/api/sessions/${pid}/stats`);
       const statsData = (await statsResponse.json()) as { success: boolean; data: { prompts: number; toolCalls: number; byTool: Record<string, number> } };
 
       if (statsData.success) {

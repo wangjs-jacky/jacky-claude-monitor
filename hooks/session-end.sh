@@ -5,7 +5,7 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/common/config.sh"
 
-DAEMON_URL="http://localhost:17530"
+DAEMON_URL="http://127.0.0.1:17530"
 # 使用父进程 ID 作为会话标识
 SESSION_PID=$PPID
 PROJECT_NAME=$(basename "$PWD")

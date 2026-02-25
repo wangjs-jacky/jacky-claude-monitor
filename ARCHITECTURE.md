@@ -430,7 +430,7 @@ TERMINAL="${TERM_PROGRAM:-unknown}"
 CWD="$PWD"
 
 # 发送到守护进程
-curl -s -X POST "$DAEMON_URL/api/sessions" \
+curl --noproxy "*" -s -X POST "$DAEMON_URL/api/sessions" \
   -H "Content-Type: application/json" \
   -d "{
     \"pid\": $PID,
@@ -439,6 +439,42 @@ curl -s -X POST "$DAEMON_URL/api/sessions" \
     \"cwd\": \"$CWD\"
   }" > /dev/null 2>&1
 ```
+
+### 代理环境变量注意事项
+
+**问题**：如果系统设置了代理环境变量（如 `all_proxy`、`http_proxy`），curl 会尝试通过代理访问 localhost，导致请求失败。
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  终端环境 (设置了代理)                                           │
+│                                                                  │
+│  curl http://localhost:17530                                    │
+│         ↓                                                        │
+│  代理服务器 (127.0.0.1:10888)                                   │
+│         ↓                                                        │
+│  ❌ 代理无法正确处理 localhost 请求                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**解决方案**：所有 hooks 中的 curl 命令必须添加 `--noproxy "*"` 参数：
+
+```bash
+# ❌ 错误：可能受代理影响
+curl -s -X POST "$DAEMON_URL/api/sessions" ...
+
+# ✅ 正确：绕过代理直接连接
+curl --noproxy "*" -s -X POST "$DAEMON_URL/api/sessions" ...
+```
+
+**替代方案**：也可以在 shell 配置中设置 `NO_PROXY` 环境变量：
+
+```bash
+# 添加到 ~/.zshrc 或 ~/.bashrc
+export NO_PROXY="localhost,127.0.0.1"
+export no_proxy="localhost,127.0.0.1"
+```
+
+**为什么 VSCode 集成终端可能不受影响**：VSCode 集成终端可能没有继承系统的代理环境变量，或者有自己的代理排除配置。
 
 ## 通知系统
 

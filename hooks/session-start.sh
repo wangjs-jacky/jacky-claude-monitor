@@ -2,7 +2,7 @@
 # hooks/session-start.sh
 # Claude Code 会话开始时调用
 
-DAEMON_URL="http://localhost:17530"
+DAEMON_URL="http://127.0.0.1:17530"
 # 使用父进程 ID 作为会话标识（所有 hooks 都由同一父进程启动）
 SESSION_PID=$PPID
 PARENT_PID=$(ps -o ppid= -p $$ | tr -d ' ')
