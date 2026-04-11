@@ -11,6 +11,11 @@ import type {
   PromptSubmitRequest,
   ToolStartRequest,
   ToolEndRequest,
+  SubagentCall,
+  SubagentStartRequest,
+  SubagentStopRequest,
+  CompactEvent,
+  CompactRequest,
 } from '../types.js';
 
 /**
@@ -28,8 +33,16 @@ export class SessionStore {
   private pendingTools: Map<string, ToolCall> = new Map();   // toolCallId -> ToolCall
   private activeToolsBySession: Map<number, Map<string, string>> = new Map();  // sessionId -> (toolCallId -> toolName)
 
+  // 子代理 & 压缩
+  private subagentCalls: Map<number, SubagentCall[]> = new Map();  // sessionId -> subagentCalls
+  private pendingSubagents: Map<string, SubagentCall> = new Map();  // subagentId -> SubagentCall
+  private activeSubagentsBySession: Map<number, Map<string, string>> = new Map();  // sessionId -> (subagentId -> agentType)
+  private compactEvents: Map<number, CompactEvent[]> = new Map();  // sessionId -> compactEvents
+
   private readonly MAX_PROMPTS_PER_SESSION = 10;
   private readonly MAX_TOOL_CALLS_PER_SESSION = 50;
+  private readonly MAX_SUBAGENTS_PER_SESSION = 20;
+  private readonly MAX_COMPACTS_PER_SESSION = 20;
 
   /**
    * 注册新会话
@@ -102,6 +115,9 @@ export class SessionStore {
       // 清理关联的提问和工具调用历史
       this.prompts.delete(pid);
       this.toolCalls.delete(pid);
+      this.subagentCalls.delete(pid);
+      this.activeSubagentsBySession.delete(pid);
+      this.compactEvents.delete(pid);
     }
     return this.sessions.delete(pid);
   }
@@ -272,14 +288,22 @@ export class SessionStore {
   getToolStats(sessionId: number): ToolStats {
     const toolCalls = this.toolCalls.get(sessionId) || [];
     const byTool: Record<string, number> = {};
+    const errorByTool: Record<string, number> = {};
+    let errorCount = 0;
 
     for (const tc of toolCalls) {
       byTool[tc.tool] = (byTool[tc.tool] || 0) + 1;
+      if (tc.status === 'error') {
+        errorCount++;
+        errorByTool[tc.tool] = (errorByTool[tc.tool] || 0) + 1;
+      }
     }
 
     return {
       totalCalls: toolCalls.length,
       byTool,
+      errorCount,
+      errorByTool,
     };
   }
 
@@ -295,6 +319,8 @@ export class SessionStore {
       promptHistory: this.getPrompts(pid),
       toolHistory: this.getToolCalls(pid),
       toolStats: this.getToolStats(pid),
+      subagentHistory: this.getSubagentCalls(pid),
+      compactHistory: this.getCompactEvents(pid),
     };
   }
 
@@ -335,6 +361,135 @@ export class SessionStore {
    */
   clearEvents(): void {
     this.events = [];
+  }
+
+  // ========== 子代理管理 ==========
+
+  /**
+   * 子代理启动
+   */
+  startSubagent(sessionId: number, request: SubagentStartRequest): SubagentCall | undefined {
+    const session = this.sessions.get(sessionId);
+    if (!session) return undefined;
+
+    const subagent: SubagentCall = {
+      id: `${sessionId}-sub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      sessionId,
+      agentType: request.agentType,
+      description: request.description || '',
+      status: 'running',
+      startedAt: Date.now(),
+    };
+
+    // 保存到待完成列表
+    this.pendingSubagents.set(subagent.id, subagent);
+
+    // 添加到会话历史
+    let calls = this.subagentCalls.get(sessionId) || [];
+    calls.unshift(subagent);
+    if (calls.length > this.MAX_SUBAGENTS_PER_SESSION) {
+      calls = calls.slice(0, this.MAX_SUBAGENTS_PER_SESSION);
+    }
+    this.subagentCalls.set(sessionId, calls);
+
+    // 更新活动子代理
+    let activeSubagents = this.activeSubagentsBySession.get(sessionId) || new Map();
+    activeSubagents.set(subagent.id, request.agentType);
+    this.activeSubagentsBySession.set(sessionId, activeSubagents);
+
+    // 更新会话
+    session.updatedAt = Date.now();
+    session.activeSubagentsCount = activeSubagents.size;
+    session.activeSubagents = Array.from(activeSubagents.values());
+
+    return subagent;
+  }
+
+  /**
+   * 子代理停止
+   */
+  stopSubagent(subagentId: string, request: SubagentStopRequest): SubagentCall | undefined {
+    const subagent = this.pendingSubagents.get(subagentId);
+    if (!subagent) return undefined;
+
+    const sessionId = subagent.sessionId;
+    const session = this.sessions.get(sessionId);
+
+    // 更新状态
+    subagent.status = request.success ? 'completed' : 'error';
+    subagent.completedAt = Date.now();
+    subagent.duration = subagent.completedAt - subagent.startedAt;
+    if (request.error) {
+      subagent.error = request.error;
+    }
+
+    // 从待完成列表移除
+    this.pendingSubagents.delete(subagentId);
+
+    // 更新活动子代理
+    const activeSubagents = this.activeSubagentsBySession.get(sessionId);
+    if (activeSubagents) {
+      activeSubagents.delete(subagentId);
+
+      if (session) {
+        session.activeSubagentsCount = activeSubagents.size;
+        session.activeSubagents = Array.from(activeSubagents.values());
+        session.updatedAt = Date.now();
+      }
+    }
+
+    // 更新历史记录
+    const sessionCalls = this.subagentCalls.get(sessionId);
+    if (sessionCalls) {
+      const index = sessionCalls.findIndex(s => s.id === subagentId);
+      if (index !== -1) {
+        sessionCalls[index] = subagent;
+      }
+    }
+
+    return subagent;
+  }
+
+  /**
+   * 获取会话的子代理调用历史
+   */
+  getSubagentCalls(sessionId: number): SubagentCall[] {
+    return this.subagentCalls.get(sessionId) || [];
+  }
+
+  // ========== 上下文压缩 ==========
+
+  /**
+   * 记录上下文压缩事件
+   */
+  addCompactEvent(sessionId: number, request: CompactRequest): CompactEvent | undefined {
+    const session = this.sessions.get(sessionId);
+    if (!session) return undefined;
+
+    const compactEvent: CompactEvent = {
+      id: `${sessionId}-compact-${Date.now()}`,
+      sessionId,
+      timestamp: Date.now(),
+      conversationId: request.conversationId,
+    };
+
+    let events = this.compactEvents.get(sessionId) || [];
+    events.unshift(compactEvent);
+    if (events.length > this.MAX_COMPACTS_PER_SESSION) {
+      events = events.slice(0, this.MAX_COMPACTS_PER_SESSION);
+    }
+    this.compactEvents.set(sessionId, events);
+
+    session.updatedAt = Date.now();
+
+    return compactEvent;
+  }
+
+  /**
+   * 获取会话的压缩事件历史
+   */
+  getCompactEvents(sessionId: number): CompactEvent[] {
+    return this.compactEvents.get(sessionId) || [];
   }
 
   /**

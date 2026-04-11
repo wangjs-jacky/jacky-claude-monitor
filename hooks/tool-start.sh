@@ -6,7 +6,7 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/common/config.sh"
 
-DAEMON_URL="http://127.0.0.1:17530"
+SOCKET_PATH="$HOME/.claude-monitor/monitor.sock"
 SESSION_PID=$PPID
 PROJECT_NAME=$(basename "$PWD")
 TERMINAL="${TERM_PROGRAM:-vscode}"
@@ -34,7 +34,7 @@ if [ -n "$TOOL" ]; then
   echo "$SESSION_PID" > "$MARKER_DIR/tool_active_$SESSION_PID"
 
   # 记录工具调用（守护进程会自动更新状态为 executing 或 multi_executing）
-  RESPONSE=$(curl --noproxy "*" -s -X POST "$DAEMON_URL/api/sessions/$SESSION_PID/tools" \
+  RESPONSE=$(curl -s --unix-socket "$SOCKET_PATH" -X POST "http://localhost/api/sessions/$SESSION_PID/tools" \
     -H "Content-Type: application/json" \
     -d "{\"tool\":\"$TOOL\",\"input\":$TOOL_INPUT}" 2>/dev/null)
 
@@ -54,7 +54,7 @@ if [ -n "$TOOL" ]; then
       DURATION=$(get_scenario_duration "executing" 2)
 
       # 获取当前会话状态（检查是否并行执行）
-      SESSION_DATA=$(curl --noproxy "*" -s "$DAEMON_URL/api/sessions/$SESSION_PID" 2>/dev/null)
+      SESSION_DATA=$(curl -s --unix-socket "$SOCKET_PATH" "http://localhost/api/sessions/$SESSION_PID" 2>/dev/null)
       STATUS=$(echo "$SESSION_DATA" | jq -r '.data.status // "executing"')
       ACTIVE_COUNT=$(echo "$SESSION_DATA" | jq -r '.data.activeToolsCount // 1')
 

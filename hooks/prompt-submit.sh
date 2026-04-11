@@ -6,7 +6,7 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/common/config.sh"
 
-DAEMON_URL="http://127.0.0.1:17530"
+SOCKET_PATH="$HOME/.claude-monitor/monitor.sock"
 SESSION_PID=$PPID
 PROJECT_NAME=$(basename "$PWD")
 TERMINAL="${TERM_PROGRAM:-vscode}"
@@ -28,12 +28,12 @@ if [ -n "$PROMPT" ]; then
   ESCAPED_PROMPT=$(echo "$PROMPT" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\n/\\n/g')
 
   # 更新状态为 thinking
-  curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
+  curl -s --unix-socket "$SOCKET_PATH" -X PATCH "http://localhost/api/sessions/$SESSION_PID" \
     -H "Content-Type: application/json" \
     -d '{"status":"thinking"}' > /dev/null 2>&1
 
   # 记录提问
-  curl --noproxy "*" -s -X POST "$DAEMON_URL/api/sessions/$SESSION_PID/prompts" \
+  curl -s --unix-socket "$SOCKET_PATH" -X POST "http://localhost/api/sessions/$SESSION_PID/prompts" \
     -H "Content-Type: application/json" \
     -d "{\"prompt\":\"$ESCAPED_PROMPT\"}" > /dev/null 2>&1
 

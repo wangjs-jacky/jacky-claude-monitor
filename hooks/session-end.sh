@@ -5,14 +5,14 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/common/config.sh"
 
-DAEMON_URL="http://127.0.0.1:17530"
+SOCKET_PATH="$HOME/.claude-monitor/monitor.sock"
 # 使用父进程 ID 作为会话标识
 SESSION_PID=$PPID
 PROJECT_NAME=$(basename "$PWD")
 TERMINAL="${TERM_PROGRAM:-vscode}"
 
 # 从守护进程注销
-curl --noproxy "*" -s -X DELETE "$DAEMON_URL/api/sessions/$SESSION_PID" > /dev/null 2>&1
+curl -s --unix-socket "$SOCKET_PATH" -X DELETE "http://localhost/api/sessions/$SESSION_PID" > /dev/null 2>&1
 
 # 检查是否启用悬浮窗
 if is_scenario_enabled "sessionEnd"; then

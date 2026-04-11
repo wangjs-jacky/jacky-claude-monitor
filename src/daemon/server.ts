@@ -15,6 +15,11 @@ import type {
   ToolEndRequest,
   UserPrompt,
   ToolCall,
+  SubagentStartRequest,
+  SubagentStopRequest,
+  SubagentCall,
+  CompactRequest,
+  CompactEvent,
 } from '../types.js';
 import { sessionStore } from './store.js';
 import {
@@ -23,6 +28,9 @@ import {
   broadcastNewPrompt,
   broadcastToolStart,
   broadcastToolEnd,
+  broadcastSubagentStart,
+  broadcastSubagentStop,
+  broadcastCompact,
 } from './websocket.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -285,7 +293,7 @@ app.get('/api/sessions/:pid/tools', (req: Request<{ pid: string }>, res: Respons
 /**
  * GET /api/sessions/:pid/stats - 获取工具调用统计
  */
-app.get('/api/sessions/:pid/stats', (req: Request<{ pid: string }>, res: Response<ApiResponse<{ prompts: number; toolCalls: number; byTool: Record<string, number> }> | ApiErrorResponse>) => {
+app.get('/api/sessions/:pid/stats', (req: Request<{ pid: string }>, res: Response<ApiResponse<{ prompts: number; toolCalls: number; byTool: Record<string, number>; errorCount: number; errorByTool: Record<string, number>; subagents: number; compacts: number }> | ApiErrorResponse>) => {
   const pid = parseInt(req.params.pid, 10);
 
   if (isNaN(pid)) {
@@ -295,18 +303,143 @@ app.get('/api/sessions/:pid/stats', (req: Request<{ pid: string }>, res: Respons
 
   const prompts = sessionStore.getPrompts(pid);
   const stats = sessionStore.getToolStats(pid);
+  const subagents = sessionStore.getSubagentCalls(pid);
+  const compacts = sessionStore.getCompactEvents(pid);
 
   res.json(success({
     prompts: prompts.length,
     toolCalls: stats.totalCalls,
     byTool: stats.byTool,
+    errorCount: stats.errorCount,
+    errorByTool: stats.errorByTool,
+    subagents: subagents.length,
+    compacts: compacts.length,
   }));
 });
 
+// ========== 子代理 API ==========
+
 /**
- * 创建并配置 HTTP 服务器
+ * POST /api/sessions/:pid/subagents - 子代理启动
  */
-export function createServer(): Server {
-  const httpServer = createHttpServer(app);
-  return httpServer;
+app.post('/api/sessions/:pid/subagents', (req: Request<{ pid: string }, ApiResponse<SubagentCall> | ApiErrorResponse, SubagentStartRequest>, res: Response<ApiResponse<SubagentCall> | ApiErrorResponse>) => {
+  const pid = parseInt(req.params.pid, 10);
+
+  if (isNaN(pid)) {
+    res.status(400).json(error('INVALID_PID', 'Invalid PID format'));
+    return;
+  }
+
+  const { agentType, description } = req.body;
+  if (!agentType) {
+    res.status(400).json(error('INVALID_REQUEST', 'Missing required field: agentType'));
+    return;
+  }
+
+  const subagent = sessionStore.startSubagent(pid, { agentType, description });
+  if (!subagent) {
+    res.status(404).json(error('SESSION_NOT_FOUND', `Session with PID ${pid} not found`));
+    return;
+  }
+
+  broadcastSubagentStart(pid, subagent);
+
+  // 广播会话状态更新（包含 activeSubagentsCount）
+  const session = sessionStore.get(pid);
+  if (session) broadcastSessionUpdate(session);
+
+  res.status(201).json(success(subagent));
+});
+
+/**
+ * PATCH /api/sessions/:pid/subagents/:subagentId - 子代理停止
+ */
+app.patch('/api/sessions/:pid/subagents/:subagentId', (req: Request<{ pid: string; subagentId: string }, ApiResponse<SubagentCall> | ApiErrorResponse, SubagentStopRequest>, res: Response<ApiResponse<SubagentCall> | ApiErrorResponse>) => {
+  const { pid, subagentId } = req.params;
+  const { success: successFlag, error: errorMsg } = req.body;
+
+  const subagent = sessionStore.stopSubagent(subagentId, {
+    success: successFlag ?? true,
+    error: errorMsg,
+  });
+
+  if (!subagent) {
+    res.status(404).json(error('SUBAGENT_NOT_FOUND', `Subagent ${subagentId} not found`));
+    return;
+  }
+
+  broadcastSubagentStop(parseInt(pid, 10), subagentId, subagent.duration || 0, subagent.status === 'completed');
+
+  // 广播会话状态更新
+  const session = sessionStore.get(parseInt(pid, 10));
+  if (session) broadcastSessionUpdate(session);
+
+  res.json(success(subagent));
+});
+
+/**
+ * GET /api/sessions/:pid/subagents - 获取子代理历史
+ */
+app.get('/api/sessions/:pid/subagents', (req: Request<{ pid: string }>, res: Response<ApiResponse<SubagentCall[]> | ApiErrorResponse>) => {
+  const pid = parseInt(req.params.pid, 10);
+
+  if (isNaN(pid)) {
+    res.status(400).json(error('INVALID_PID', 'Invalid PID format'));
+    return;
+  }
+
+  const subagents = sessionStore.getSubagentCalls(pid);
+  res.json(success(subagents));
+});
+
+// ========== 上下文压缩 API ==========
+
+/**
+ * POST /api/sessions/:pid/compacts - 记录压缩事件
+ */
+app.post('/api/sessions/:pid/compacts', (req: Request<{ pid: string }, ApiResponse<CompactEvent> | ApiErrorResponse, CompactRequest>, res: Response<ApiResponse<CompactEvent> | ApiErrorResponse>) => {
+  const pid = parseInt(req.params.pid, 10);
+
+  if (isNaN(pid)) {
+    res.status(400).json(error('INVALID_PID', 'Invalid PID format'));
+    return;
+  }
+
+  const { conversationId } = req.body;
+  if (!conversationId) {
+    res.status(400).json(error('INVALID_REQUEST', 'Missing required field: conversationId'));
+    return;
+  }
+
+  const compactEvent = sessionStore.addCompactEvent(pid, { conversationId });
+  if (!compactEvent) {
+    res.status(404).json(error('SESSION_NOT_FOUND', `Session with PID ${pid} not found`));
+    return;
+  }
+
+  broadcastCompact(pid, compactEvent);
+
+  res.status(201).json(success(compactEvent));
+});
+
+/**
+ * GET /api/sessions/:pid/compacts - 获取压缩事件历史
+ */
+app.get('/api/sessions/:pid/compacts', (req: Request<{ pid: string }>, res: Response<ApiResponse<CompactEvent[]> | ApiErrorResponse>) => {
+  const pid = parseInt(req.params.pid, 10);
+
+  if (isNaN(pid)) {
+    res.status(400).json(error('INVALID_PID', 'Invalid PID format'));
+    return;
+  }
+
+  const compacts = sessionStore.getCompactEvents(pid);
+  res.json(success(compacts));
+});
+
+/**
+ * 获取 Express app（用于创建多个 server 实例共享路由）
+ */
+export function getApp() {
+  return app;
 }

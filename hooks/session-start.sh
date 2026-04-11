@@ -2,7 +2,7 @@
 # hooks/session-start.sh
 # Claude Code 会话开始时调用
 
-DAEMON_URL="http://127.0.0.1:17530"
+SOCKET_PATH="$HOME/.claude-monitor/monitor.sock"
 # 使用父进程 ID 作为会话标识（所有 hooks 都由同一父进程启动）
 SESSION_PID=$PPID
 PARENT_PID=$(ps -o ppid= -p $$ | tr -d ' ')
@@ -10,7 +10,7 @@ TERMINAL="${TERM_PROGRAM:-unknown}"
 CWD="$PWD"
 
 # 发送到守护进程
-curl --noproxy "*" -s -X POST "$DAEMON_URL/api/sessions" \
+curl -s --unix-socket "$SOCKET_PATH" -X POST "http://localhost/api/sessions" \
   -H "Content-Type: application/json" \
   -d "{
     \"pid\": $SESSION_PID,

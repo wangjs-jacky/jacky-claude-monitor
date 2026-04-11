@@ -9,7 +9,7 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/common/config.sh"
 
-DAEMON_URL="http://127.0.0.1:17530"
+SOCKET_PATH="$HOME/.claude-monitor/monitor.sock"
 SESSION_PID=$PPID
 PROJECT_NAME=$(basename "$PWD")
 TERMINAL="${TERM_PROGRAM:-vscode}"
@@ -27,7 +27,7 @@ else
 fi
 
 # 更新会话状态为 waiting_input
-curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
+curl -s --unix-socket "$SOCKET_PATH" -X PATCH "http://localhost/api/sessions/$SESSION_PID" \
   -H "Content-Type: application/json" \
   -d "{\"status\":\"waiting_input\",\"message\":\"$MESSAGE\"}" > /dev/null 2>&1
 

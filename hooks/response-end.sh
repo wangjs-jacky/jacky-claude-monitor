@@ -6,7 +6,7 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/common/config.sh"
 
-DAEMON_URL="http://127.0.0.1:17530"
+SOCKET_PATH="$HOME/.claude-monitor/monitor.sock"
 SESSION_PID=$PPID
 PROJECT_NAME=$(basename "$PWD")
 TERMINAL="${TERM_PROGRAM:-vscode}"
@@ -19,7 +19,7 @@ MARKER_FILE="$MARKER_DIR/tool_active_$SESSION_PID"
 rm -f "$MARKER_FILE" 2>/dev/null
 
 # 更新状态为 completed（任务完成）
-curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID" \
+curl -s --unix-socket "$SOCKET_PATH" -X PATCH "http://localhost/api/sessions/$SESSION_PID" \
   -H "Content-Type: application/json" \
   -d '{"status":"completed","message":"","activeToolsCount":0,"activeTools":[]}' > /dev/null 2>&1
 

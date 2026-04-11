@@ -1,7 +1,7 @@
 // src/daemon/websocket.ts
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
-import type { ServerMessage, ClientMessage, UserPrompt, ToolCall, Session } from '../types.js';
+import type { ServerMessage, ClientMessage, UserPrompt, ToolCall, Session, SubagentCall, CompactEvent } from '../types.js';
 import { sessionStore } from './store.js';
 
 let wss: WebSocketServer | null = null;
@@ -116,4 +116,25 @@ export function broadcastToolEnd(sessionId: number, toolCallId: string, duration
  */
 export function broadcastSessionRemoved(pid: number): void {
   broadcast({ type: 'session_removed', pid });
+}
+
+/**
+ * 广播子代理启动
+ */
+export function broadcastSubagentStart(sessionId: number, subagent: SubagentCall): void {
+  broadcast({ type: 'subagent_start', sessionId, subagent });
+}
+
+/**
+ * 广播子代理停止
+ */
+export function broadcastSubagentStop(sessionId: number, subagentId: string, duration: number, success: boolean): void {
+  broadcast({ type: 'subagent_stop', sessionId, subagentId, duration, success });
+}
+
+/**
+ * 广播上下文压缩
+ */
+export function broadcastCompact(sessionId: number, compactEvent: CompactEvent): void {
+  broadcast({ type: 'compact', sessionId, compactEvent });
 }

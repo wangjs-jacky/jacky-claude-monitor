@@ -1,4 +1,4 @@
-import { Clock, Play, Square, Pause, RotateCcw, Skull } from 'lucide-react';
+import { Clock, Play, Square, Pause, RotateCcw, Skull, Users, Minimize2, AlertTriangle } from 'lucide-react';
 import type { SessionEvent } from '../types';
 
 interface EventTimelineProps {
@@ -22,6 +22,14 @@ export function EventTimeline({ events }: EventTimelineProps) {
         return <RotateCcw className="w-4 h-4 text-blue-400" />;
       case 'killed':
         return <Skull className="w-4 h-4 text-red-400" />;
+      case 'subagent_start':
+        return <Users className="w-4 h-4 text-cyan-400" />;
+      case 'subagent_stop':
+        return <Users className="w-4 h-4 text-gray-400" />;
+      case 'compact':
+        return <Minimize2 className="w-4 h-4 text-purple-400" />;
+      case 'tool_failure':
+        return <AlertTriangle className="w-4 h-4 text-red-400" />;
       default:
         return <Clock className="w-4 h-4 text-gray-400" />;
     }
@@ -34,6 +42,10 @@ export function EventTimeline({ events }: EventTimelineProps) {
       waiting: '等待输入',
       resumed: '恢复运行',
       killed: '被终止',
+      subagent_start: '子代理启动',
+      subagent_stop: '子代理完成',
+      compact: '上下文压缩',
+      tool_failure: '工具失败',
     };
     return labels[type] || type;
   };

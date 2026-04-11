@@ -1,4 +1,4 @@
-import { Brain, Clock, Terminal, Trash2, CheckCircle, Loader2 } from 'lucide-react';
+import { Brain, Clock, Terminal, Trash2, CheckCircle, Loader2, Users, AlertTriangle } from 'lucide-react';
 import type { Session } from '../types';
 import { STATUS_CONFIG } from '../types';
 
@@ -30,6 +30,7 @@ export function SessionList({ sessions, onKill }: SessionListProps) {
     const config = STATUS_CONFIG[status];
     const colorClass = {
       gray: 'text-gray-400',
+      dim: 'text-gray-400',
       yellow: 'text-yellow-400',
       cyan: 'text-cyan-400',
       orange: 'text-orange-400',
@@ -41,11 +42,14 @@ export function SessionList({ sessions, onKill }: SessionListProps) {
       case 'thinking':
         return <Brain className={`w-5 h-5 ${colorClass}`} />;
       case 'executing':
+      case 'multi_executing':
         return <Loader2 className={`w-5 h-5 ${colorClass} animate-spin`} />;
       case 'waiting_input':
         return <Clock className={`w-5 h-5 ${colorClass}`} />;
-      case 'done':
+      case 'completed':
         return <CheckCircle className={`w-5 h-5 ${colorClass}`} />;
+      case 'error':
+        return <AlertTriangle className={`w-5 h-5 ${colorClass}`} />;
       default:
         return <Terminal className={`w-5 h-5 ${colorClass}`} />;
     }
@@ -70,6 +74,7 @@ export function SessionList({ sessions, onKill }: SessionListProps) {
       <div className="space-y-3">
         {sessions.map((session) => {
           const statusConfig = STATUS_CONFIG[session.status];
+          const hasSubagents = (session.activeSubagentsCount ?? 0) > 0;
           return (
             <div
               key={session.pid}
@@ -83,10 +88,19 @@ export function SessionList({ sessions, onKill }: SessionListProps) {
                   <div className="text-sm text-gray-400">
                     {getTerminalLabel(session.terminal)} | {formatDuration(session.startedAt)}
                   </div>
-                  <div className="text-sm text-gray-500 mt-1">
-                    {statusConfig.icon} {statusConfig.label}
-                    {session.message && ` - ${session.message}`}
+                  <div className="text-sm text-gray-500 mt-1 flex items-center gap-2">
+                    <span>{statusConfig.icon} {statusConfig.label}</span>
+                    {session.message && <span>- {session.message}</span>}
                   </div>
+                  {hasSubagents && (
+                    <div className="text-xs text-cyan-400 mt-1 flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      <span>{session.activeSubagentsCount} 个子代理运行中</span>
+                      {session.activeSubagents && session.activeSubagents.length > 0 && (
+                        <span className="text-gray-500">({session.activeSubagents.join(', ')})</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -11,12 +11,10 @@ export type SessionStatus =
   | 'thinking'         // 正在思考/推理
   | 'executing'        // 正在执行单个工具
   | 'multi_executing'  // 正在并行执行多个工具
-  | 'streaming'        // LLM 正在输出文本
   | 'waiting_input'    // 等待用户交互 (AskUserQuestion)
-  | 'tool_done'        // 单个工具完成
+  | 'tool_done'        // 所有工具完成
   | 'completed'        // 整个任务完成
-  | 'error'            // 执行出错
-  | 'ended';           // 会话结束
+  | 'error';           // 执行出错
 
 // 状态显示配置
 export const STATUS_CONFIG: Record<SessionStatus, { icon: string; label: string; color: string }> = {
@@ -24,12 +22,10 @@ export const STATUS_CONFIG: Record<SessionStatus, { icon: string; label: string;
   thinking: { icon: '🧠', label: '思考中', color: 'yellow' },
   executing: { icon: '⚙️', label: '执行中', color: 'cyan' },
   multi_executing: { icon: '⚡', label: '并行执行', color: 'cyan' },
-  streaming: { icon: '📝', label: '输出中', color: 'green' },
   waiting_input: { icon: '⏳', label: '等待输入', color: 'yellow' },
   tool_done: { icon: '✓', label: '工具完成', color: 'dim' },
   completed: { icon: '✅', label: '完成', color: 'green' },
   error: { icon: '❌', label: '出错', color: 'red' },
-  ended: { icon: '🛑', label: '已结束', color: 'red' },
 };
 
 // 会话信息
@@ -58,6 +54,10 @@ export interface Session {
   activeToolsCount?: number;
   /** 正在执行的工具列表 */
   activeTools?: string[];
+  /** 活跃子代理数量 */
+  activeSubagentsCount?: number;
+  /** 活跃子代理类型列表 */
+  activeSubagents?: string[];
 }
 
 // 注册会话请求
@@ -201,10 +201,34 @@ export interface ToolCall {
   error?: string;         // 错误信息
 }
 
+// 子代理调用记录
+export interface SubagentCall {
+  id: string;
+  sessionId: number;      // 关联的会话 PID
+  agentType: string;      // 子代理类型: general-purpose, Explore, Plan 等
+  description: string;    // 任务描述
+  status: 'running' | 'completed' | 'error';
+  startedAt: number;
+  completedAt?: number;
+  duration?: number;      // 耗时 (ms)
+  error?: string;
+}
+
+// 上下文压缩事件
+export interface CompactEvent {
+  id: string;
+  sessionId: number;      // 关联的会话 PID
+  timestamp: number;
+  conversationId: string; // 会话 ID
+  reason?: string;        // 压缩原因（如有）
+}
+
 // 工具调用统计
 export interface ToolStats {
   totalCalls: number;
   byTool: Record<string, number>;
+  errorCount: number;     // 失败次数
+  errorByTool: Record<string, number>;  // 按工具统计失败次数
 }
 
 // 增强后的会话信息
@@ -232,10 +256,27 @@ export interface ToolEndRequest {
   error?: string;
 }
 
+// 子代理启动请求
+export interface SubagentStartRequest {
+  agentType: string;
+  description?: string;
+}
+
+// 子代理停止请求
+export interface SubagentStopRequest {
+  success: boolean;
+  error?: string;
+}
+
+// 上下文压缩请求
+export interface CompactRequest {
+  conversationId: string;
+}
+
 // ========== 会话事件 & WebSocket ==========
 
 // 会话事件类型
-export type SessionEventType = 'started' | 'ended' | 'waiting' | 'resumed' | 'killed';
+export type SessionEventType = 'started' | 'ended' | 'waiting' | 'resumed' | 'killed' | 'subagent_start' | 'subagent_stop' | 'compact' | 'tool_failure';
 
 // 会话事件
 export interface SessionEvent {
@@ -256,7 +297,11 @@ export type ServerMessage =
   // 增强功能：实时过程监控
   | { type: 'new_prompt'; sessionId: number; prompt: UserPrompt }
   | { type: 'tool_start'; sessionId: number; toolCall: ToolCall }
-  | { type: 'tool_end'; sessionId: number; toolCallId: string; duration: number; success: boolean };
+  | { type: 'tool_end'; sessionId: number; toolCallId: string; duration: number; success: boolean }
+  // 新增：子代理 & 压缩
+  | { type: 'subagent_start'; sessionId: number; subagent: SubagentCall }
+  | { type: 'subagent_stop'; sessionId: number; subagentId: string; duration: number; success: boolean }
+  | { type: 'compact'; sessionId: number; compactEvent: CompactEvent };
 
 export type ClientMessage =
   | { type: 'kill_session'; pid: number }

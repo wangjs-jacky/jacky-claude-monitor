@@ -6,7 +6,7 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/common/config.sh"
 
-DAEMON_URL="http://127.0.0.1:17530"
+SOCKET_PATH="$HOME/.claude-monitor/monitor.sock"
 SESSION_PID=$PPID
 PROJECT_NAME=$(basename "$PWD")
 TERMINAL="${TERM_PROGRAM:-vscode}"
@@ -48,12 +48,12 @@ if [ -n "$TOOL_CALL_ID" ]; then
     ERROR_PART=",\"error\":\"$ESCAPED_ERROR\""
   fi
 
-  RESPONSE=$(curl --noproxy "*" -s -X PATCH "$DAEMON_URL/api/sessions/$SESSION_PID/tools/$TOOL_CALL_ID" \
+  RESPONSE=$(curl -s --unix-socket "$SOCKET_PATH" -X PATCH "http://localhost/api/sessions/$SESSION_PID/tools/$TOOL_CALL_ID" \
     -H "Content-Type: application/json" \
     -d "{\"success\":$SUCCESS$ERROR_PART}" 2>/dev/null)
 
   # 检查会话状态，如果所有工具完成则显示弹窗
-  SESSION_STATUS=$(curl --noproxy "*" -s "$DAEMON_URL/api/sessions/$SESSION_PID" 2>/dev/null | jq -r '.data.status // empty')
+  SESSION_STATUS=$(curl -s --unix-socket "$SOCKET_PATH" "http://localhost/api/sessions/$SESSION_PID" 2>/dev/null | jq -r '.data.status // empty')
 
   if [ "$SESSION_STATUS" = "tool_done" ]; then
     # 所有工具完成，显示工具完成弹窗（但不显示任务完成）

@@ -1,0 +1,200 @@
+{
+  "version": "1.0.0",
+  "description": "Claude Code Hook 事件 stdin JSON schema 定义，基于 2312 条真实日志分析",
+  "schemas": {
+    "SessionStart": {
+      "description": "会话开始时触发",
+      "trigger": "启动新的 Claude Code 会话",
+      "required_fields": {
+        "session_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "desc": "UUID 格式会话 ID" },
+        "transcript_path": { "type": "string", "pattern": "^/", "desc": "会话记录文件路径" },
+        "cwd": { "type": "string", "pattern": "^/", "desc": "工作目录" },
+        "hook_event_name": { "type": "string", "const": "SessionStart", "desc": "事件名" },
+        "source": { "type": "string", "desc": "触发来源" }
+      },
+      "optional_fields": {
+        "model": { "type": "string", "desc": "使用的模型名称" }
+      }
+    },
+    "SessionEnd": {
+      "description": "会话结束时触发",
+      "trigger": "退出 Claude Code 会话",
+      "required_fields": {
+        "session_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "transcript_path": { "type": "string", "pattern": "^/" },
+        "cwd": { "type": "string", "pattern": "^/" },
+        "hook_event_name": { "type": "string", "const": "SessionEnd" },
+        "reason": { "type": "string", "desc": "结束原因" }
+      },
+      "optional_fields": {}
+    },
+    "UserPromptSubmit": {
+      "description": "用户提交问题时触发",
+      "trigger": "在 Claude Code 中输入任何内容并回车",
+      "required_fields": {
+        "session_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "transcript_path": { "type": "string", "pattern": "^/" },
+        "cwd": { "type": "string", "pattern": "^/" },
+        "hook_event_name": { "type": "string", "const": "UserPromptSubmit" },
+        "prompt": { "type": "string", "min_length": 1, "desc": "用户输入文本" }
+      },
+      "optional_fields": {
+        "permission_mode": { "type": "string" },
+        "attachments": { "type": "array" },
+        "model": { "type": "string" }
+      }
+    },
+    "PreToolUse": {
+      "description": "工具调用前触发",
+      "trigger": "Claude 执行任何工具",
+      "required_fields": {
+        "session_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "transcript_path": { "type": "string", "pattern": "^/" },
+        "cwd": { "type": "string", "pattern": "^/" },
+        "hook_event_name": { "type": "string", "const": "PreToolUse" },
+        "tool_name": { "type": "string", "desc": "工具名称如 Read/Bash/Edit" },
+        "tool_input": { "type": "object", "desc": "工具输入参数" }
+      },
+      "optional_fields": {
+        "tool_use_id": { "type": "string" },
+        "permission_mode": { "type": "string" },
+        "agent_id": { "type": "string" },
+        "agent_type": { "type": "string" },
+        "model": { "type": "string" }
+      }
+    },
+    "PostToolUse": {
+      "description": "工具调用成功后触发",
+      "trigger": "Claude 成功执行一个工具",
+      "required_fields": {
+        "session_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "transcript_path": { "type": "string", "pattern": "^/" },
+        "cwd": { "type": "string", "pattern": "^/" },
+        "hook_event_name": { "type": "string", "const": "PostToolUse" },
+        "tool_name": { "type": "string" },
+        "tool_input": { "type": "object" }
+      },
+      "optional_fields": {
+        "tool_response": { "type": "object", "desc": "工具返回结果" },
+        "tool_output": { "type": "string" },
+        "tool_use_id": { "type": "string" },
+        "permission_mode": { "type": "string" },
+        "agent_id": { "type": "string" },
+        "agent_type": { "type": "string" },
+        "model": { "type": "string" },
+        "duration": { "type": "string" }
+      }
+    },
+    "PostToolUseFailure": {
+      "description": "工具调用失败后触发",
+      "trigger": "Claude 执行一个会失败的工具调用",
+      "required_fields": {
+        "session_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "transcript_path": { "type": "string", "pattern": "^/" },
+        "cwd": { "type": "string", "pattern": "^/" },
+        "hook_event_name": { "type": "string", "const": "PostToolUseFailure" },
+        "tool_name": { "type": "string" },
+        "tool_input": { "type": "object" },
+        "error": { "type": "string", "desc": "错误信息" }
+      },
+      "optional_fields": {
+        "tool_use_id": { "type": "string" },
+        "is_interrupt": { "type": "boolean" },
+        "permission_mode": { "type": "string" },
+        "agent_id": { "type": "string" },
+        "agent_type": { "type": "string" }
+      }
+    },
+    "Stop": {
+      "description": "LLM 响应结束时触发",
+      "trigger": "Claude 完成一次回答后",
+      "required_fields": {
+        "session_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "transcript_path": { "type": "string", "pattern": "^/" },
+        "cwd": { "type": "string", "pattern": "^/" },
+        "hook_event_name": { "type": "string", "const": "Stop" }
+      },
+      "optional_fields": {
+        "stop_hook_active": { "type": "boolean" },
+        "last_assistant_message": { "type": "string" },
+        "permission_mode": { "type": "string" },
+        "status": { "type": "string" },
+        "loop_count": { "type": "number" },
+        "model": { "type": "string" }
+      }
+    },
+    "Notification": {
+      "description": "通知事件触发",
+      "trigger": "Claude 等待输入超时或需要权限时",
+      "required_fields": {
+        "session_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "transcript_path": { "type": "string", "pattern": "^/" },
+        "cwd": { "type": "string", "pattern": "^/" },
+        "hook_event_name": { "type": "string", "const": "Notification" },
+        "message": { "type": "string", "desc": "通知消息内容" }
+      },
+      "optional_fields": {
+        "notification_type": { "type": "string", "desc": "通知类型如 idle_prompt" }
+      }
+    },
+    "PreCompact": {
+      "description": "上下文压缩前触发",
+      "trigger": "上下文过长时自动压缩",
+      "required_fields": {
+        "session_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "transcript_path": { "type": "string", "pattern": "^/" },
+        "cwd": { "type": "string", "pattern": "^/" },
+        "hook_event_name": { "type": "string", "const": "PreCompact" }
+      },
+      "optional_fields": {},
+      "note": "2312 条日志中未捕获此事件，需要极长上下文才能触发"
+    },
+    "SubagentStart": {
+      "description": "子代理启动时触发",
+      "trigger": "派发子代理任务",
+      "required_fields": {
+        "session_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "transcript_path": { "type": "string", "pattern": "^/" },
+        "cwd": { "type": "string", "pattern": "^/" },
+        "hook_event_name": { "type": "string", "const": "SubagentStart" },
+        "agent_id": { "type": "string", "desc": "子代理 ID" },
+        "agent_type": { "type": "string", "desc": "子代理类型如 Explore/Plan" }
+      },
+      "optional_fields": {}
+    },
+    "SubagentStop": {
+      "description": "子代理停止时触发",
+      "trigger": "子代理完成任务或失败",
+      "required_fields": {
+        "session_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "transcript_path": { "type": "string", "pattern": "^/" },
+        "cwd": { "type": "string", "pattern": "^/" },
+        "hook_event_name": { "type": "string", "const": "SubagentStop" },
+        "agent_id": { "type": "string" },
+        "agent_type": { "type": "string" }
+      },
+      "optional_fields": {
+        "agent_transcript_path": { "type": "string" },
+        "stop_hook_active": { "type": "boolean" },
+        "last_assistant_message": { "type": "string" },
+        "permission_mode": { "type": "string" }
+      }
+    },
+    "PermissionRequest": {
+      "description": "权限请求时触发",
+      "trigger": "非 bypassPermissions 模式下执行需要权限的工具",
+      "required_fields": {
+        "session_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "transcript_path": { "type": "string", "pattern": "^/" },
+        "cwd": { "type": "string", "pattern": "^/" },
+        "hook_event_name": { "type": "string", "const": "PermissionRequest" },
+        "tool_name": { "type": "string" },
+        "tool_input": { "type": "object" }
+      },
+      "optional_fields": {
+        "permission_mode": { "type": "string" },
+        "permission_suggestions": { "type": "array" }
+      }
+    }
+  }
+}
