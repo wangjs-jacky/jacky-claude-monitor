@@ -156,15 +156,29 @@ async function getCwdForPid(pid: number): Promise<string> {
  */
 async function getTerminalForPid(ppid: number): Promise<string> {
   try {
-    const { stdout } = await execAsync(
-      `ps -o comm= -p ${ppid} 2>/dev/null`
-    );
-    const comm = stdout.trim().toLowerCase();
+    // 向上遍历父进程链（最多 5 层），找到终端进程
+    let currentPid = ppid;
+    for (let i = 0; i < 5; i++) {
+      const { stdout } = await execAsync(
+        `ps -o comm=,ppid= -p ${currentPid} 2>/dev/null`
+      );
+      if (!stdout.trim()) break;
 
-    if (comm.includes('vscode') || comm.includes('cursor')) return 'vscode';
-    if (comm.includes('iterm')) return 'iterm';
-    if (comm.includes('warp')) return 'warp';
-    if (comm.includes('terminal')) return 'terminal';
+      // 解析 "comm ppid" 格式
+      const parts = stdout.trim().split(/\s+/);
+      const comm = parts.slice(0, -1).join(' ').toLowerCase();
+      const nextPid = parseInt(parts[parts.length - 1]);
+
+      // Cursor 必须在 VSCode 之前检查（Cursor 进程名包含 "cursor"）
+      if (comm.includes('cursor')) return 'cursor';
+      if (comm.includes('vscode') || comm.includes('code helper')) return 'vscode';
+      if (comm.includes('iterm')) return 'iterm';
+      if (comm.includes('warp')) return 'warp';
+      if (comm.includes('terminal')) return 'terminal';
+
+      if (isNaN(nextPid) || nextPid <= 1) break;
+      currentPid = nextPid;
+    }
     return 'unknown';
   } catch {
     return 'unknown';

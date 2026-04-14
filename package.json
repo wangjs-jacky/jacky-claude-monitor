@@ -11,6 +11,9 @@
     "hooks",
     "swift-notify/main.swift"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev:daemon": "tsx src/daemon/index.ts",
     "dev:cli": "tsx src/cli/index.ts",

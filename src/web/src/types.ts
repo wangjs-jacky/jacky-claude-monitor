@@ -4,7 +4,7 @@
  */
 
 // 终端类型
-export type TerminalType = 'vscode' | 'iterm' | 'warp' | 'terminal' | 'unknown';
+export type TerminalType = 'vscode' | 'cursor' | 'iterm' | 'warp' | 'terminal' | 'unknown';
 
 // 会话状态（与后端一致）
 export type SessionStatus =

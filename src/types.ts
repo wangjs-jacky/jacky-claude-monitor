@@ -3,7 +3,7 @@
  */
 
 // 终端类型
-export type TerminalType = 'vscode' | 'iterm' | 'warp' | 'terminal' | 'unknown';
+export type TerminalType = 'vscode' | 'cursor' | 'iterm' | 'warp' | 'terminal' | 'unknown';
 
 // 会话状态（增强版）
 export type SessionStatus =
@@ -169,6 +169,7 @@ export const DEFAULT_CONFIG: Config = {
 // 终端 Bundle ID 映射
 export const TERMINAL_BUNDLE_ID: Record<TerminalType, string> = {
   vscode: 'com.microsoft.VSCode',
+  cursor: 'com.todesktop.230313mzl4w4u92',
   iterm: 'com.googlecode.iterm2',
   warp: 'dev.warp.Warp-Stable',
   terminal: 'com.apple.Terminal',

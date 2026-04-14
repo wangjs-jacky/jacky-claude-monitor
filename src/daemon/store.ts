@@ -514,6 +514,7 @@ export class SessionStore {
   private normalizeTerminal(terminal: string): Session['terminal'] {
     const terminalMap: Record<string, Session['terminal']> = {
       'vscode': 'vscode',
+      'cursor': 'cursor',
       'iTerm.app': 'iterm',
       'iTerm': 'iterm',
       'WarpTerminal': 'warp',
