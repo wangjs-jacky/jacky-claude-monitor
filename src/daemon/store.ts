@@ -46,8 +46,16 @@ export class SessionStore {
 
   /**
    * 注册新会话
+   * 如果 PID 已存在（如 discovery 和 hook 重复注册），更新已有会话信息
    */
   register(request: RegisterSessionRequest): Session {
+    // 去重：如果已注册，更新信息而不是重复创建
+    const existing = this.sessions.get(request.pid);
+    if (existing) {
+      existing.updatedAt = Date.now();
+      return existing;
+    }
+
     const now = Date.now();
     const project = this.extractProjectName(request.cwd);
 

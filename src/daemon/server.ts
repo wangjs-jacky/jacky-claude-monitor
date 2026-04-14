@@ -22,6 +22,7 @@ import type {
   CompactEvent,
 } from '../types.js';
 import { sessionStore } from './store.js';
+import { discoverClaudeSessions } from './discovery.js';
 import {
   broadcastSessionUpdate,
   broadcastSessionRemoved,
@@ -165,6 +166,20 @@ app.delete('/api/sessions/:pid', (req: Request<{ pid: string }>, res: Response<A
  */
 app.get('/api/health', (_req: Request, res: Response<ApiResponse<{ status: string; sessions: number }>>) => {
   res.json(success({ status: 'ok', sessions: sessionStore.count }));
+});
+
+/**
+ * POST /api/discover - 手动触发进程发现
+ * 扫描进程表，发现并注册已运行但未追踪的 Claude Code 会话
+ */
+app.post('/api/discover', async (_req: Request, res: Response<ApiResponse<Session[]> | ApiErrorResponse>) => {
+  try {
+    const discovered = await discoverClaudeSessions();
+    res.json(success(discovered));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    res.status(500).json(error('DISCOVERY_FAILED', message));
+  }
 });
 
 /**

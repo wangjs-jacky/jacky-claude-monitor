@@ -5,6 +5,7 @@ import { join } from 'path';
 import { getApp } from './server.js';
 import { initWebSocket } from './websocket.js';
 import { startZombieChecker, stopZombieChecker } from './zombie.js';
+import { discoverClaudeSessions } from './discovery.js';
 import { DEFAULT_CONFIG } from '../types.js';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : DEFAULT_CONFIG.port;
@@ -35,6 +36,11 @@ const udsServer = createHttpServer(app);
 udsServer.listen(SOCKET_PATH, () => {
   console.log(`UDS server (Hooks): ${SOCKET_PATH}`);
   startZombieChecker(DEFAULT_CONFIG.checkInterval);
+
+  // 自动发现已运行的 Claude Code 会话
+  discoverClaudeSessions().catch(err => {
+    console.error('自动发现会话失败:', err);
+  });
 });
 
 // ========== 优雅关闭 ==========
