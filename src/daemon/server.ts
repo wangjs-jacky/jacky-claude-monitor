@@ -22,7 +22,7 @@ import type {
   CompactEvent,
 } from '../types.js';
 import { sessionStore } from './store.js';
-import { discoverClaudeSessions } from './discovery.js';
+import { discoverClaudeSessions, ensureSessionExists } from './discovery.js';
 import {
   broadcastSessionUpdate,
   broadcastSessionRemoved,
@@ -111,8 +111,9 @@ app.get('/api/sessions/:pid', (req: Request<{ pid: string }>, res: Response<ApiR
 
 /**
  * PATCH /api/sessions/:pid - 更新会话状态
+ * 如果会话已被假关闭（从追踪列表移除），自动重新注册
  */
-app.patch('/api/sessions/:pid', (req: Request<{ pid: string }, ApiResponse<Session> | ApiErrorResponse, UpdateSessionRequest>, res: Response<ApiResponse<Session> | ApiErrorResponse>) => {
+app.patch('/api/sessions/:pid', async (req: Request<{ pid: string }, ApiResponse<Session> | ApiErrorResponse, UpdateSessionRequest>, res: Response<ApiResponse<Session> | ApiErrorResponse>) => {
   const pid = parseInt(req.params.pid, 10);
 
   if (isNaN(pid)) {
@@ -124,6 +125,16 @@ app.patch('/api/sessions/:pid', (req: Request<{ pid: string }, ApiResponse<Sessi
   if (!status) {
     res.status(400).json(error('INVALID_REQUEST', 'Missing required field: status'));
     return;
+  }
+
+  // 会话不存在时自动重新注册（假关闭后 hooks 再次触发的场景）
+  if (!sessionStore.get(pid)) {
+    const discovered = await ensureSessionExists(pid);
+    if (!discovered) {
+      res.status(404).json(error('SESSION_NOT_FOUND', `Session with PID ${pid} not found and cannot be discovered`));
+      return;
+    }
+    broadcastSessionUpdate(discovered);
   }
 
   const session = sessionStore.update(pid, status, message);
@@ -194,8 +205,9 @@ app.get('/api/events', (_req: Request, res: Response<ApiResponse<SessionEvent[]>
 
 /**
  * POST /api/sessions/:pid/prompts - 记录用户提问
+ * 如果会话已被假关闭，自动重新注册
  */
-app.post('/api/sessions/:pid/prompts', (req: Request<{ pid: string }, ApiResponse<UserPrompt> | ApiErrorResponse, PromptSubmitRequest>, res: Response<ApiResponse<UserPrompt> | ApiErrorResponse>) => {
+app.post('/api/sessions/:pid/prompts', async (req: Request<{ pid: string }, ApiResponse<UserPrompt> | ApiErrorResponse, PromptSubmitRequest>, res: Response<ApiResponse<UserPrompt> | ApiErrorResponse>) => {
   const pid = parseInt(req.params.pid, 10);
 
   if (isNaN(pid)) {
@@ -207,6 +219,12 @@ app.post('/api/sessions/:pid/prompts', (req: Request<{ pid: string }, ApiRespons
   if (!prompt) {
     res.status(400).json(error('INVALID_REQUEST', 'Missing required field: prompt'));
     return;
+  }
+
+  // 会话不存在时自动重新注册
+  if (!sessionStore.get(pid)) {
+    const discovered = await ensureSessionExists(pid);
+    if (discovered) broadcastSessionUpdate(discovered);
   }
 
   const userPrompt = sessionStore.addPrompt(pid, { prompt });
@@ -240,8 +258,9 @@ app.get('/api/sessions/:pid/prompts', (req: Request<{ pid: string }>, res: Respo
 
 /**
  * POST /api/sessions/:pid/tools - 开始工具调用
+ * 如果会话已被假关闭，自动重新注册
  */
-app.post('/api/sessions/:pid/tools', (req: Request<{ pid: string }, ApiResponse<ToolCall> | ApiErrorResponse, ToolStartRequest>, res: Response<ApiResponse<ToolCall> | ApiErrorResponse>) => {
+app.post('/api/sessions/:pid/tools', async (req: Request<{ pid: string }, ApiResponse<ToolCall> | ApiErrorResponse, ToolStartRequest>, res: Response<ApiResponse<ToolCall> | ApiErrorResponse>) => {
   const pid = parseInt(req.params.pid, 10);
 
   if (isNaN(pid)) {
@@ -253,6 +272,12 @@ app.post('/api/sessions/:pid/tools', (req: Request<{ pid: string }, ApiResponse<
   if (!tool) {
     res.status(400).json(error('INVALID_REQUEST', 'Missing required field: tool'));
     return;
+  }
+
+  // 会话不存在时自动重新注册
+  if (!sessionStore.get(pid)) {
+    const discovered = await ensureSessionExists(pid);
+    if (discovered) broadcastSessionUpdate(discovered);
   }
 
   const toolCall = sessionStore.startToolCall(pid, { tool, input: input || {} });
@@ -336,8 +361,9 @@ app.get('/api/sessions/:pid/stats', (req: Request<{ pid: string }>, res: Respons
 
 /**
  * POST /api/sessions/:pid/subagents - 子代理启动
+ * 如果会话已被假关闭，自动重新注册
  */
-app.post('/api/sessions/:pid/subagents', (req: Request<{ pid: string }, ApiResponse<SubagentCall> | ApiErrorResponse, SubagentStartRequest>, res: Response<ApiResponse<SubagentCall> | ApiErrorResponse>) => {
+app.post('/api/sessions/:pid/subagents', async (req: Request<{ pid: string }, ApiResponse<SubagentCall> | ApiErrorResponse, SubagentStartRequest>, res: Response<ApiResponse<SubagentCall> | ApiErrorResponse>) => {
   const pid = parseInt(req.params.pid, 10);
 
   if (isNaN(pid)) {
@@ -349,6 +375,12 @@ app.post('/api/sessions/:pid/subagents', (req: Request<{ pid: string }, ApiRespo
   if (!agentType) {
     res.status(400).json(error('INVALID_REQUEST', 'Missing required field: agentType'));
     return;
+  }
+
+  // 会话不存在时自动重新注册
+  if (!sessionStore.get(pid)) {
+    const discovered = await ensureSessionExists(pid);
+    if (discovered) broadcastSessionUpdate(discovered);
   }
 
   const subagent = sessionStore.startSubagent(pid, { agentType, description });

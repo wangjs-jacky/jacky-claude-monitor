@@ -184,3 +184,42 @@ async function getTerminalForPid(ppid: number): Promise<string> {
     return 'unknown';
   }
 }
+
+/**
+ * 确保指定 PID 的会话存在于 store 中
+ * 用于假关闭后 hooks 再次触发的场景：自动重新注册已运行但未追踪的会话
+ * @returns 新注册的 Session（已存在则返回 null）
+ */
+export async function ensureSessionExists(pid: number): Promise<Session | null> {
+  // 已存在则无需处理
+  if (sessionStore.get(pid)) return null;
+
+  try {
+    // 检查进程是否存活
+    const { stdout } = await execAsync(`ps -o pid=,ppid=,command= -p ${pid} 2>/dev/null`);
+    if (!stdout.trim()) return null;
+
+    const match = stdout.trim().match(/^(\d+)\s+(\d+)\s+(.+)$/);
+    if (!match) return null;
+
+    const ppid = parseInt(match[2]);
+    const command = match[3];
+
+    // 确认是 Claude Code 进程
+    if (!isClaudeCodeProcess(command)) return null;
+
+    // 获取工作目录和终端类型
+    const cwd = await getCwdForPid(pid);
+    if (!cwd) return null;
+
+    const terminal = await getTerminalForPid(ppid);
+
+    // 注册到 store
+    const session = sessionStore.register({ pid, ppid, terminal, cwd });
+    console.log(`🔄 自动重新注册会话: PID ${pid} (${terminal})`);
+    return session;
+  } catch (err) {
+    console.error(`ensureSessionExists(${pid}) 失败:`, err);
+    return null;
+  }
+}
